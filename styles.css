@@ -335,7 +335,7 @@ input[type="checkbox"]:disabled { opacity: .55; cursor: not-allowed; }
 .project-name { font-weight: var(--weight-semibold); font-size: var(--font-lede); }
 .project-address { display: block; font-family: var(--font-code); font-size: var(--font-meta); margin-block: var(--space-2); overflow-wrap: anywhere; }
 a.project-address { display: flex; align-items: center; min-block-size: var(--control-target); }
-.project-note { color: var(--color-text-secondary); font-size: var(--font-meta); }
+.project-note { color: var(--color-text-secondary); font-size: var(--font-meta); overflow-wrap: anywhere; }
 .role-section { padding-block: var(--space-3); }
 .role-section + .role-section { margin-block-start: var(--space-10); }
 .role-section > p { color: var(--color-text-secondary); max-inline-size: var(--reading-width); margin-block-end: var(--space-5); padding-inline: var(--surface-gutter); font-size: var(--font-meta); }

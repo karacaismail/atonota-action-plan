@@ -276,6 +276,14 @@ try {
         await finePage.waitForFunction(() => !document.querySelector('[data-option]').disabled);
         const capabilities = await finePage.evaluate(() => ({ coarse:matchMedia('(any-pointer:coarse)').matches,fine:matchMedia('(any-pointer:fine)').matches,hover:matchMedia('(hover:hover)').matches }));
         assert.equal(capabilities.fine,true); assert.equal(capabilities.coarse,false);
+        if(width===320) {
+          const fallback = await finePage.addStyleTag({content:':root { --font-reading: monospace; }'});
+          const overflow = await finePage.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+          const diagnosis = await finePage.locator('.project-note, .role-phase, .flow-list').evaluateAll(elements => elements.map(element=>({class:element.className,text:element.textContent.slice(0,160),width:element.clientWidth,scrollWidth:element.scrollWidth,font:getComputedStyle(element).fontFamily})).filter(element=>element.scrollWidth>element.width));
+          await writeFile(join(out,`${engine}-fallback-font-320.json`),JSON.stringify({overflow,diagnosis},null,2));
+          assert.equal(overflow,false,`${engine} 320px fallback font must not overflow: ${JSON.stringify(diagnosis)}`);
+          await fallback.evaluate(element=>element.remove());
+        }
         const firstTask = finePage.locator('[data-complete="U01"]');
         await firstTask.focus(); await finePage.keyboard.press('Space');
         assert.equal(await firstTask.isChecked(),true);
@@ -291,7 +299,7 @@ try {
           await finePage.locator('.rail [href="#akislar"]').click();
           await finePage.screenshot({path:join(out,`${engine}-desktop-flows.png`)});
         }
-        results.push({engine,width,input:'precision + keyboard',capabilities,criticalJourney:'pass'});
+        results.push({engine,width,input:'precision + keyboard',capabilities,criticalJourney:'pass',fallbackFontNoOverflow:width===320 ? 'pass' : 'not_applicable'});
         await fineContext.close();
       }
     } finally { await browser.close(); }
