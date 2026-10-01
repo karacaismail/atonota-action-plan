@@ -33,6 +33,10 @@ function updateNext() {
 }
 
 function update() {
+  const focused = document.activeElement;
+  const taskScope = focused.closest('[data-task]');
+  const nextScope = focused.closest('#next-actions');
+  const focusedHref = focused.matches('a') ? focused.getAttribute('href') : null;
   for (const task of plan.tasks) {
     const status = statusOf(task, state, plan);
     const row = document.querySelector(`[data-task="${task.id}"]`);
@@ -86,6 +90,18 @@ function update() {
   for (const input of document.querySelectorAll('[data-option]')) {
     input.disabled = false;
     input.checked = state.options[input.dataset.option];
+  }
+  if (focused.matches('a, button, input, summary')) {
+    let replacement = focused;
+    if (!focused.isConnected && focusedHref) {
+      const scope = taskScope ?? nextScope ?? document;
+      replacement = [...scope.querySelectorAll('a')].find(anchor => anchor.getAttribute('href') === focusedHref);
+    }
+    if (!replacement || replacement.disabled || replacement.closest('[hidden]')) {
+      const summary = taskScope?.closest('details')?.querySelector('summary');
+      replacement = summary && !summary.closest('[hidden]') ? summary : document.querySelector('[data-owner-filter][aria-pressed="true"]');
+    }
+    if (document.activeElement !== replacement) replacement.focus({ preventScroll: true });
   }
 }
 

@@ -66,14 +66,16 @@ try {
       await page.keyboard.press('Space');
       assert.equal(await first.isChecked(), true);
       assert.equal(await page.locator('[data-complete="U02"]').isDisabled(), false);
+      // Acquire focus by real keyboard navigation; programmatic focus after a mouse
+      // click is not focus-visible in every engine.
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Shift+Tab');
+      assert.equal(await page.evaluate(() => document.activeElement.dataset.complete), 'U01');
       const focusStyle = await first.evaluate(element => ({ outline:getComputedStyle(element).outlineWidth, outlineStyle:getComputedStyle(element).outlineStyle, parent:getComputedStyle(element.closest('.task')).outlineWidth, parentStyle:getComputedStyle(element.closest('.task')).outlineStyle, shadow:getComputedStyle(element).boxShadow }));
       assert.equal(focusStyle.outline, '2px');
       assert.equal(focusStyle.outlineStyle, 'solid');
       assert.equal(focusStyle.parentStyle, 'none');
       assert.equal(focusStyle.shadow, 'none');
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Shift+Tab');
-      assert.equal(await page.evaluate(() => document.activeElement.dataset.complete), 'U01');
       await page.locator('[data-complete="U02"]').check();
       await page.reload();
       await page.waitForFunction(() => !document.querySelector('[data-option]').disabled);
@@ -125,6 +127,12 @@ try {
       await peer.locator('[data-complete="U01"]').check();
       await page.waitForFunction(() => document.querySelector('[data-complete="U01"]').checked);
       assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), '#role-cengiz-phase-0');
+      const dependency = page.locator('#task-U02 .dependency-link').first();
+      await dependency.focus();
+      await peer.locator('[data-complete="U04"]').check();
+      await page.waitForFunction(() => document.querySelector('[data-complete="U04"]').checked);
+      assert.equal(await page.evaluate(() => document.activeElement.closest('[data-task]')?.id), 'task-U02');
+      assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), '#task-U01');
       await peer.close();
       await page.locator('#rail-menu summary').click();
       await page.locator('.rail [href="#role-cengiz"]').click();

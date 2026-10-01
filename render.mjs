@@ -9,7 +9,7 @@ export function renderTask(task, state, plan) {
   const status = statusOf(task, state, plan);
   const dependencies = dependenciesOf(task, state, plan);
   return `<li class="task" id="task-${task.id}" data-task="${task.id}" data-status="${status}" ${status === 'inactive' ? 'hidden' : ''}>
-    <label class="task-check"><input type="checkbox" data-complete="${task.id}" disabled aria-describedby="meta-${task.id}"><span class="sr-only">${task.id}: ${escapeHTML(task.title)} — tamamlandı olarak işaretle</span></label>
+    <label class="task-check"><input type="checkbox" tabindex="0" data-complete="${task.id}" disabled aria-describedby="meta-${task.id}"><span class="sr-only">${task.id}: ${escapeHTML(task.title)} — tamamlandı olarak işaretle</span></label>
     <div class="task-copy"><div class="task-id">${task.id}</div><h4 class="task-title">${escapeHTML(task.title)}</h4><span class="task-status" data-task-status="${task.id}">${statusLabels[status]}</span>
     <div class="task-meta" id="meta-${task.id}"><p><strong>Çıktı:</strong> ${escapeHTML(task.output)}</p><p><strong>Kabul:</strong> ${escapeHTML(task.accept)}</p></div>
     <div class="dependencies" data-dependencies="${task.id}">${dependencies.length ? `Ön koşul: ${dependencies.map(id => link(`#task-${id}`, id, 'dependency-link')).join(' ')}` : 'Ön koşul yok; başlayabilirsin.'}</div></div></li>`;
