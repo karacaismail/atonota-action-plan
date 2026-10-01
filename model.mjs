@@ -2,6 +2,20 @@ export const isActive = (task, state) => !task.when || state.options[task.when] 
 // Older shared development URLs now lead to Ismail's single roadmap.
 export const canonicalAnchor = id => /^role-ekip(?:-phase-\d+)?$/.test(id) ? id.replace('role-ekip', 'role-sen') : id;
 
+const revisionOf = task => task.revision === undefined ? 1 : task.revision;
+const requestedCompletions = raw => new Set(Array.isArray(raw?.completed) ? raw.completed.filter(id => typeof id === 'string') : []);
+function storedRevision(raw, id) {
+  const revisions = raw?.completionRevisions;
+  // A missing record predates revisions. An explicit invalid record is not proof.
+  return revisions && typeof revisions === 'object' && !Array.isArray(revisions) && Object.hasOwn(revisions, id)
+    ? revisions[id] : 1;
+}
+
+export function changedCompletionIDs(raw, plan) {
+  const requested = requestedCompletions(raw);
+  return plan.tasks.filter(task => requested.has(task.id) && storedRevision(raw, task.id) !== revisionOf(task)).map(task => task.id);
+}
+
 export function dependenciesOf(task, state, plan) {
   const optional = (task.optionalDepends ?? []).filter(id => {
     const dependency = plan.tasks.find(item => item.id === id);
@@ -12,19 +26,22 @@ export function dependenciesOf(task, state, plan) {
 
 export function normalizeState(raw, plan) {
   const options = Object.fromEntries(plan.options.map(option => [option.id, raw?.options?.[option.id] === true]));
-  const requested = new Set(Array.isArray(raw?.completed) ? raw.completed.filter(id => typeof id === 'string') : []);
-  const state = { completed: [], options };
+  const requested = requestedCompletions(raw);
+  const state = { completed: [], options, completionRevisions: {} };
   // Resolve in dependency order, not storage order. Invalid and stale work is dropped.
   for (let pass = 0; pass < plan.tasks.length; pass++) {
     let changed = false;
     for (const task of plan.tasks) {
-      if (requested.has(task.id) && !state.completed.includes(task.id) && statusOf(task, state, plan) === 'ready') {
+      if (requested.has(task.id) && storedRevision(raw, task.id) === revisionOf(task)
+        && !state.completed.includes(task.id) && statusOf(task, state, plan) === 'ready') {
         state.completed.push(task.id);
         changed = true;
       }
     }
     if (!changed) break;
   }
+  // Only accepted completions carry evidence; prune stale, unknown and inactive IDs.
+  state.completionRevisions = Object.fromEntries(state.completed.map(id => [id, revisionOf(plan.tasks.find(task => task.id === id))]));
   return state;
 }
 
@@ -43,7 +60,10 @@ export function transition(previous, action, plan) {
   if (action.type === 'task') {
     const task = plan.tasks.find(item => item.id === action.id);
     if (task && !action.checked) state.completed = state.completed.filter(id => id !== task.id);
-    else if (task && statusOf(task, state, plan) === 'ready') state.completed.push(task.id);
+    else if (task && statusOf(task, state, plan) === 'ready') {
+      state.completed.push(task.id);
+      state.completionRevisions = { ...state.completionRevisions, [task.id]: revisionOf(task) };
+    }
   }
   return normalizeState(state, plan);
 }
@@ -55,6 +75,7 @@ export function validatePlan(plan) {
   for (const task of plan.tasks) {
     if (ids.has(task.id)) errors.push(`Duplicate task: ${task.id}`);
     ids.add(task.id);
+    if (!Number.isSafeInteger(revisionOf(task)) || revisionOf(task) < 1) errors.push(`Invalid revision: ${task.id}`);
     if (task.when && !options.has(task.when)) errors.push(`Unknown option: ${task.when}`);
   }
   const visited = new Set();

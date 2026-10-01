@@ -5,6 +5,17 @@
 Genel yol haritası, kişi/aşama bağlantıları, görev bağımlılıkları ve dört koşullu iş kolu.
 İşaretler yalnız tarayıcıda tutulur. Bu uygulama Hetzner, DNS veya hesaplarda işlem yapmaz; gerçek onay/deploy kaydı değildir.
 
+[Workbench başlatıcısını aç](https://karacaismail.github.io/atonota-workbench/) · [320px UX-first görev tanımı](https://github.com/karacaismail/atonota-workbench/blob/main/docs/workbench-mobile-320-ux-first.md)
+
+## Kayıtlı kararlar ve görünür akışlar
+
+- `wb.atonota.net/pp`, `/od`, `/ad`, `/b3d`, `/sbbeta`, `/sbrc`; Pen ayrı `pen.atonota.net`. Bunlar yeniden karar istenen adresler değildir.
+- Hazır uygulamalar kendi upstream repolarından; özel geliştirme `karacaismail` public repolarından. Yeni özgün kod lisansı ayrı kullanıcı seçimi; kaynak hazırlığını ve statik Workbench yayınını bloke etmez.
+- Dört Frappe `press-*` sunucusu kullanıcı beyanına göre kurulu/tamam ve kapsam dışı. Workbench hedefi ayrı dedicated AMD EPYC128GB RAM (beyan); OS/disk/GPU/port/kapasite Cengiz tarafından ayrıca ölçülür. Ham sunucu ekran görüntüleri, IP ve şifreler burada tutulmaz.
+- Geliştirme/devir, DNS, telefon→MCP ve beta→RC→Pen diyagramlarında düğüm ilgili görevi; kişi etiketi kendi aşamasını açar. Yerel işaret değişince düğüm durumu yenilenir. Seçilen ek iş kolu görünür; gerçek ön koşullar bağlantılıdır. Diagram durumu servis health değildir.
+- Görev başlığı/durumu/ön koşulları görünür; çıktı ve kabul detayı isteğe bağlı açılır. Yerel kayıt/odak ve eski rol URL'leri korunur.
+- Kabul kapsamı değişen görevler eski işaretle tamamlanmış sayılmaz. Görev revision'ı ile yalnız ilgili iş ve bağımlıları yeniden doğrulamaya açılır; diğer geçerli işaretler ve kol seçimleri korunur.
+
 ## Görev sahipleri
 
 - İsmail Karaca: kararlar, geliştirme, onay, public ürün repo içerikleri ve GitHub'a gönderim; tek birleşik yol haritası. Codex ve Claude Code kullandığı vibecoding araçlarıdır, ayrı görev sahipleri değildir.

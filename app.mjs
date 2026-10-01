@@ -1,6 +1,6 @@
 import { plan } from './plan.mjs';
-import { normalizeState, transition, statusOf, dependenciesOf, isActive, canonicalAnchor } from './model.mjs';
-import { escapeHTML, renderNext, statusLabels } from './render.mjs';
+import { normalizeState, transition, statusOf, isActive, canonicalAnchor, changedCompletionIDs } from './model.mjs';
+import { renderDependencyLinks, renderNext, statusLabels } from './render.mjs';
 
 const key = 'atonota-action-plan:v1';
 let state = normalizeState(null, plan);
@@ -11,7 +11,7 @@ const feedback = document.querySelector('#feedback');
 const menu = document.querySelector('#rail-menu');
 if (matchMedia('(min-width: 64rem) and (min-height: 35rem)').matches) menu.open = true;
 
-try { state = normalizeState(JSON.parse(localStorage.getItem(key)), plan); }
+try { applyStoredState(JSON.parse(localStorage.getItem(key))); }
 catch { document.querySelector('#storage-note').textContent = 'Kalıcı kayıt kullanılamadı. İşaretler bu açık sayfada çalışır; sayfa yenilenince kaybolabilir.'; }
 
 function save() {
@@ -20,6 +20,16 @@ function save() {
     document.querySelector('#storage-note').textContent = 'Kayıt yapılamadı. İlerlemeyi indir; bu oturumdaki işaretler yenilenince kaybolabilir.';
     return false;
   }
+}
+
+function applyStoredState(raw, fromPeer = false) {
+  const revised = changedCompletionIDs(raw, plan);
+  state = normalizeState(raw, plan);
+  if (revised.length) {
+    // Save the narrow migration once; preserve the v1 key and unrelated progress.
+    const saved = save();
+    feedback.textContent = `Takip kaydı güncellendi: ${revised.join(', ')} yeniden doğrulanmalı. Bunlara bağlı eski işaretler kaldırıldı; diğer geçerli ilerleme ve kol seçimleri korundu.${saved ? '' : ' Bu oturumda uygulandı; kalıcı kayıt başarısız. İlerlemeyi indir; yenilemede aynı uyarı tekrar görünebilir.'}`;
+  } else if (fromPeer) feedback.textContent = 'İlerleme aynı tarayıcının diğer sekmesinden güncellendi.';
 }
 
 function updateNext() {
@@ -36,6 +46,8 @@ function update() {
   const focused = document.activeElement;
   const taskScope = focused.closest('[data-task]');
   const nextScope = focused.closest('#next-actions');
+  const flowScope = focused.closest('[data-flow-task]');
+  const branchScope = focused.closest('[data-branch]');
   const focusedHref = focused.matches('a') ? focused.getAttribute('href') : null;
   for (const task of plan.tasks) {
     const status = statusOf(task, state, plan);
@@ -46,11 +58,22 @@ function update() {
     input.checked = status === 'done';
     input.disabled = status === 'waiting' || status === 'inactive';
     row.querySelector('[data-task-status]').textContent = statusLabels[status];
-    const dependencies = dependenciesOf(task, state, plan);
-    row.querySelector('[data-dependencies]').innerHTML = dependencies.length
-      ? `Ön koşul: ${dependencies.map(id => `<a class="dependency-link" href="#task-${id}" aria-label="${id}: ${escapeHTML(plan.tasks.find(item => item.id === id).title)}">${id}${state.completed.includes(id) ? ' · tamam' : ' · bekliyor'}</a>`).join(' ')}`
-      : 'Ön koşul yok; başlayabilirsin.';
+    const dependencies = row.querySelector('[data-dependencies]');
+    const content = renderDependencyLinks(task, state, plan);
+    if (dependencies.innerHTML !== content) dependencies.innerHTML = content;
   }
+  for (const node of document.querySelectorAll('[data-flow-task]')) {
+    const task = plan.tasks.find(task => task.id === node.dataset.flowTask);
+    const status = statusOf(task, state, plan);
+    node.dataset.status = status;
+    node.querySelector('[data-flow-status]').textContent = statusLabels[status];
+    const dependencies = node.querySelector('[data-flow-dependencies]');
+    if (dependencies) {
+      const content = renderDependencyLinks(task, state, plan);
+      if (dependencies.innerHTML !== content) dependencies.innerHTML = content;
+    }
+  }
+  for (const branch of document.querySelectorAll('[data-branch]')) branch.hidden = !state.options[branch.dataset.branch];
   const active = plan.tasks.filter(task => isActive(task, state));
   document.querySelector('[data-metric="done"]').textContent = `${state.completed.length} / ${active.length}`;
   document.querySelector('[data-metric="ready"]').textContent = active.filter(task => statusOf(task, state, plan) === 'ready').length;
@@ -94,12 +117,13 @@ function update() {
   if (focused.matches('a, button, input, summary')) {
     let replacement = focused;
     if (!focused.isConnected && focusedHref) {
-      const scope = taskScope ?? nextScope ?? document;
+      const scope = taskScope ?? flowScope ?? nextScope ?? document;
       replacement = [...scope.querySelectorAll('a')].find(anchor => anchor.getAttribute('href') === focusedHref);
     }
     if (!replacement || replacement.disabled || replacement.closest('[hidden]')) {
       const summary = taskScope?.closest('details')?.querySelector('summary');
-      replacement = summary && !summary.closest('[hidden]') ? summary : document.querySelector('[data-owner-filter][aria-pressed="true"]');
+      const option = branchScope && document.querySelector(`[data-option="${branchScope.dataset.branch}"]`);
+      replacement = option ?? (summary && !summary.closest('[hidden]') ? summary : document.querySelector('[data-owner-filter][aria-pressed="true"]'));
     }
     if (document.activeElement !== replacement) replacement.focus({ preventScroll: true });
   }
@@ -157,7 +181,7 @@ window.addEventListener('hashchange', goToHash);
 window.addEventListener('popstate', goToHash);
 window.addEventListener('storage', event => {
   if (event.key !== key) return;
-  try { state = normalizeState(JSON.parse(event.newValue), plan); update(); feedback.textContent = 'İlerleme aynı tarayıcının diğer sekmesinden güncellendi.'; }
+  try { applyStoredState(JSON.parse(event.newValue), true); update(); }
   catch { feedback.textContent = 'Diğer sekmedeki takip verisi okunamadı; mevcut işaretler korundu.'; }
 });
 

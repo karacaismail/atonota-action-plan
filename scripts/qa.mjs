@@ -49,6 +49,17 @@ try {
       assert.match(await page.locator('#role-sen > p').textContent(), /Codex ve Claude Code/);
       assert.equal(await page.getByRole('link', { name: 'Sen', exact: true }).count(), 0);
       assert.equal(await page.getByRole('link', { name: 'Geliştirme ekibi', exact: true }).count(), 0);
+      assert.equal(await page.locator('#akislar > .flow').count(), 4);
+      assert.equal(await page.locator('#detail-U01').getAttribute('open'), null);
+      assert.equal(await page.locator('#meta-U01').isVisible(), false);
+      await page.locator('#detail-U01 > summary').click();
+      assert.equal(await page.locator('#meta-U01').isVisible(), true);
+      await page.locator('#detail-U01 > summary').click();
+      assert.equal(await page.locator('#meta-U01').isVisible(), false);
+      assert.equal(await page.locator('#akislar [data-flow-task="E01"]').getAttribute('data-status'), 'ready');
+      assert.equal(await page.locator('[data-branch="form"]').isVisible(), false);
+      await page.evaluate(() => scrollTo({ top:0, behavior:'instant' }));
+      await page.screenshot({ path: join(out, `${engine}-mobile-top.png`) });
       const coldResources = await page.evaluate(() => [...performance.getEntriesByType('navigation'), ...performance.getEntriesByType('resource')].map(entry => ({ name: entry.name, encodedBytes: entry.encodedBodySize, transferBytes: entry.transferSize })));
       await page.keyboard.press('Tab');
       // WebKit's default link tabbing policy differs; test activation from the
@@ -92,7 +103,9 @@ try {
       assert.equal(await page.locator('#role-asistan-phase-2').getAttribute('open'), '');
       assert.equal(await page.evaluate(() => document.activeElement.parentElement.id), 'role-asistan-phase-2');
       assert.equal(await page.locator('[data-complete="A02"]').isDisabled(), true);
-      await page.locator('#genel [href="#role-sen-phase-0"]').click();
+      await page.locator('#genel .stage [href="#role-sen-phase-0"]').click();
+      assert.equal(await page.locator('[data-complete="U02"]').isDisabled(), false);
+      assert.equal(await page.locator('[data-complete="E01"]').isDisabled(), false);
       const first = page.locator('[data-complete="U01"]');
       await first.focus();
       await page.keyboard.press('Space');
@@ -111,6 +124,8 @@ try {
       await page.locator('[data-complete="U02"]').check();
       if (await page.locator('#role-sen-phase-1').getAttribute('open') === null) await page.locator('#role-sen-phase-1 > summary').click();
       await page.locator('[data-complete="E01"]').check();
+      assert.equal(await page.locator('#akislar [data-flow-task="E01"]').getAttribute('data-status'), 'done');
+      assert.equal(await page.locator('#akislar [data-flow-status="E01"]').textContent(), 'Tamamlandı');
       await page.reload();
       await page.waitForFunction(() => !document.querySelector('[data-option]').disabled);
       assert.equal(await first.isChecked(), true);
@@ -121,15 +136,23 @@ try {
       assert.equal(await page.evaluate(() => document.activeElement.closest('.role-section').id), 'role-sen');
       assert.equal(await page.locator('#role-ekip').count(), 0);
       await first.uncheck();
-      assert.equal(await page.locator('[data-complete="U02"]').isChecked(), false);
-      assert.equal(await page.locator('[data-complete="U02"]').isDisabled(), true);
+      assert.equal(await page.locator('[data-complete="U02"]').isChecked(), true);
+      assert.equal(await page.locator('[data-complete="U02"]').isDisabled(), false);
+      assert.equal(await page.locator('[data-complete="E01"]').isChecked(), true);
+      assert.equal(await page.locator('[data-complete="E03"]').isDisabled(), false);
       await page.locator('[data-option="form"]').focus();
       await page.keyboard.press('Space');
       assert.equal(await page.locator('#task-F01').getAttribute('hidden'), null);
+      assert.equal(await page.locator('[data-branch="form"]').isVisible(), true);
+      const formDependencies = page.locator('[data-flow-dependencies="F02"] a');
+      assert.deepEqual(await formDependencies.evaluateAll(elements => elements.map(element => element.getAttribute('href'))), ['#task-F01', '#task-E06']);
+      const misleadingArrows = await page.locator('.dependency-map > li').evaluateAll(elements => elements.map(element => ({before:getComputedStyle(element,'::before').content,after:getComputedStyle(element,'::after').content})));
+      assert.ok(misleadingArrows.every(styles => ['none','normal'].includes(styles.before) && ['none','normal'].includes(styles.after)), `${engine} parallel branches must not imply adjacent dependencies`);
       assert.equal(await page.evaluate(() => document.activeElement.dataset.option), 'form');
       await page.locator('[data-option="form"]').uncheck();
       assert.equal(await page.locator('#task-F01').getAttribute('hidden'), '');
-      await page.locator('#genel [href="#role-sen-phase-0"]').click();
+      assert.equal(await page.locator('[data-branch="form"]').isVisible(), false);
+      await page.locator('#genel .stage [href="#role-sen-phase-0"]').click();
       const target = page.locator('[data-complete="U04"]');
       await target.check(); await target.focus();
       await page.setViewportSize({ width: 844, height: 390 });
@@ -168,12 +191,21 @@ try {
       await peer.locator('[data-complete="U01"]').check();
       await page.waitForFunction(() => document.querySelector('[data-complete="U01"]').checked);
       assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), '#role-cengiz-phase-0');
-      const dependency = page.locator('#task-U02 .dependency-link').first();
+      if (await page.locator('#role-sen-phase-1').getAttribute('open') === null) await page.locator('#role-sen-phase-1 > summary').click();
+      const dependency = page.locator('#task-E02 .dependency-link').first();
       await dependency.focus();
       await peer.locator('[data-complete="U04"]').check();
       await page.waitForFunction(() => document.querySelector('[data-complete="U04"]').checked);
-      assert.equal(await page.evaluate(() => document.activeElement.closest('[data-task]')?.id), 'task-U02');
-      assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), '#task-U01');
+      assert.equal(await page.evaluate(() => document.activeElement.closest('[data-task]')?.id), 'task-E02');
+      assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), '#task-E01');
+      // Another tab closing a conditional branch returns focus to its own toggle.
+      await page.locator('[data-option="form"]').check();
+      await peer.waitForFunction(() => document.querySelector('[data-option="form"]').checked);
+      await formDependencies.first().focus();
+      await peer.locator('[data-option="form"]').uncheck();
+      await page.waitForFunction(() => !document.querySelector('[data-option="form"]').checked);
+      assert.equal(await page.evaluate(() => document.activeElement.dataset.option), 'form');
+      assert.equal(await page.locator('[data-branch="form"]').isVisible(), false);
       await peer.close();
       await page.locator('#rail-menu summary').click();
       await page.locator('.rail [href="#role-cengiz"]').click();
@@ -193,6 +225,31 @@ try {
       assert.equal(await staticPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       results.push({ engine, noJavaScript: 'pass' });
       await noJS.close();
+      // Legacy decisions must not complete newly expanded technical acceptance.
+      const legacy = await browser.newContext({ viewport:{width:320,height:800},reducedMotion:'reduce',locale:'tr-TR' });
+      const legacyPage = await legacy.newPage();
+      await legacyPage.goto(url);
+      await legacyPage.evaluate(() => localStorage.setItem('atonota-action-plan:v1', JSON.stringify({ completed:['H01','U03','U04','U05','H03','U01','U02','A01','E01','E03'],options:{form:true} })));
+      await legacyPage.reload();
+      await legacyPage.waitForFunction(() => !document.querySelector('[data-option]').disabled);
+      for(const id of ['H01','U03','U04','U05','H03']) assert.equal(await legacyPage.locator(`[data-complete="${id}"]`).isChecked(),false,`${engine} legacy ${id} requires renewed acceptance`);
+      for(const id of ['U01','U02','A01','E01','E03']) assert.equal(await legacyPage.locator(`[data-complete="${id}"]`).isChecked(),true,`${engine} unrelated valid ${id} survives migration`);
+      assert.equal(await legacyPage.locator('[data-option="form"]').isChecked(),true);
+      assert.equal(await legacyPage.locator('[data-complete="H03"]').isDisabled(),true);
+      assert.match(await legacyPage.locator('#feedback').textContent(),/yeniden/i);
+      await legacyPage.locator('#role-cengiz-phase-0 > summary').click();
+      await legacyPage.locator('[data-complete="H01"]').check();
+      await legacyPage.locator('[data-complete="U03"]').check();
+      await legacyPage.reload();
+      await legacyPage.waitForFunction(() => !document.querySelector('[data-option]').disabled);
+      assert.equal(await legacyPage.locator('[data-complete="H01"]').isChecked(),true);
+      assert.equal(await legacyPage.locator('[data-complete="U03"]').isChecked(),true);
+      assert.equal(await legacyPage.locator('[data-complete="H03"]').isDisabled(),false);
+      const migrated = await legacyPage.evaluate(() => JSON.parse(localStorage.getItem('atonota-action-plan:v1')));
+      assert.equal(migrated.completionRevisions.H01,2);
+      assert.equal(migrated.completionRevisions.U03,2);
+      await legacy.close();
+      results.push({engine,legacyTaskRevisionMigration:'pass',unrelatedProgressPreserved:'pass',renewedCompletionReload:'pass'});
       const blocked = await browser.newContext({ viewport: { width: 320, height: 800 } });
       await blocked.addInitScript(() => {
         Object.defineProperty(Storage.prototype, 'setItem', { value() { throw new DOMException('Blocked for regression', 'QuotaExceededError'); } });
@@ -205,7 +262,7 @@ try {
       assert.match(await blockedPage.locator('#feedback').textContent(), /kalıcı kayıt başarısız/);
       assert.doesNotMatch(await blockedPage.locator('#feedback').textContent(), /ilerleme kaydedildi/);
       await blocked.close();
-      results.push({ engine, failedStorageWrite: 'pass', crossTabFocus: 'pass', closedRoleNavigation: 'pass' });
+      results.push({ engine, failedStorageWrite: 'pass', crossTabFocus: 'pass', closedRoleNavigation: 'pass', collapsedTaskMetadata:'pass', dynamicFlowState:'pass', conditionalDependencyMap:'pass', closingBranchFocus:'pass' });
       for (const width of [320,1440]) {
         const fineContext = await browser.newContext({ viewport:{width,height:800},hasTouch:false,reducedMotion:'reduce',locale:'tr-TR',deviceScaleFactor:1,serviceWorkers:'block' });
         const finePage = await fineContext.newPage(); await finePage.goto(url);
@@ -222,8 +279,9 @@ try {
           assert.ok(dimensions.height >=minimum && dimensions.width >=minimum, `${engine} critical hit area ${selector}`);
         }
         if(width===1440) {
+          await finePage.evaluate(() => scrollTo({ top:0, behavior:'instant' }));
           await finePage.screenshot({path:join(out,`${engine}-desktop-top.png`)});
-          await finePage.locator('#akislar').scrollIntoViewIfNeeded();
+          await finePage.locator('.rail [href="#akislar"]').click();
           await finePage.screenshot({path:join(out,`${engine}-desktop-flows.png`)});
         }
         results.push({engine,width,input:'precision + keyboard',capabilities,criticalJourney:'pass'});
