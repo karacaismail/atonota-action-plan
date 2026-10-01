@@ -189,14 +189,21 @@ try {
       await page.waitForFunction(() => !document.querySelector('[data-option]').disabled);
       assert.equal(await target.isChecked(), false);
       assert.match(await page.locator('#storage-note').textContent(), /kullanılamadı/);
+      // Reload restores the hash on the next animation frame after controls enable.
+      // Finish that navigation before establishing the focus tested across tabs.
+      assert.equal(await page.evaluate(() => location.hash), '#role-sen-phase-0');
+      await page.waitForFunction(() => document.activeElement.tagName === 'SUMMARY' && document.activeElement.parentElement.id === 'role-sen-phase-0');
       // Real same-origin second tab update must not detach a focused owner chip.
       const ownerChip = page.locator('[data-phase="0"] [href="#role-cengiz-phase-0"]');
-      await ownerChip.focus();
       const peer = await context.newPage();
       await peer.goto(url);
       await peer.waitForFunction(() => !document.querySelector('[data-option]').disabled);
+      await ownerChip.focus();
+      assert.equal(await ownerChip.evaluate(element => element === document.activeElement), true);
       await peer.locator('[data-complete="U01"]').check();
       await page.waitForFunction(() => document.querySelector('[data-complete="U01"]').checked);
+      const crossTabFocus = await page.evaluate(() => ({ hash:location.hash, tag:document.activeElement.tagName, id:document.activeElement.id, href:document.activeElement.getAttribute('href'), phase:document.activeElement.closest('[data-role-phase]')?.id ?? null }));
+      if (crossTabFocus.href !== '#role-cengiz-phase-0') await writeFile(join(out,`${engine}-cross-tab-focus.json`),JSON.stringify(crossTabFocus,null,2));
       assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), '#role-cengiz-phase-0');
       if (await page.locator('#role-sen-phase-1').getAttribute('open') === null) await page.locator('#role-sen-phase-1 > summary').click();
       const dependency = page.locator('#task-E02 .dependency-link').first();
