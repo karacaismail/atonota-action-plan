@@ -41,6 +41,11 @@ try {
       page.on('request', request => requests.push(request.url()));
       await page.goto(url);
       await page.waitForFunction(() => !document.querySelector('[data-option]').disabled);
+      assert.equal(await page.locator('#heading-sen').textContent(), 'İsmail Karaca');
+      assert.equal(await page.locator('#heading-ekip').textContent(), 'İsmail Karaca + Codex + Claude Code');
+      assert.match(await page.locator('#role-ekip > p').textContent(), /sorumlusu İsmail Karaca/);
+      assert.equal(await page.getByRole('link', { name: 'Sen', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('link', { name: 'Geliştirme ekibi', exact: true }).count(), 0);
       const coldResources = await page.evaluate(() => [...performance.getEntriesByType('navigation'), ...performance.getEntriesByType('resource')].map(entry => ({ name: entry.name, encodedBytes: entry.encodedBodySize, transferBytes: entry.transferSize })));
       for (const width of widths) {
         await page.setViewportSize({ width, height: 800 });
@@ -55,6 +60,14 @@ try {
         results.push({ engine, viewport, shortHeight: 'pass', capabilities: await page.evaluate(() => ({ coarse:matchMedia('(any-pointer:coarse)').matches, fine:matchMedia('(any-pointer:fine)').matches, hover:matchMedia('(hover:hover)').matches })) });
       }
       await page.setViewportSize({ width: 320, height: 800 });
+      await page.locator('.stage [href="#role-ekip-phase-1"]').click();
+      assert.equal(await page.locator('#role-ekip-phase-1').getAttribute('open'), '');
+      assert.equal(await page.evaluate(() => document.activeElement.parentElement.id), 'role-ekip-phase-1');
+      assert.match(await page.locator('#task-E13').textContent(), /linux\/amd64/);
+      await page.screenshot({ path: join(out, `${engine}-vibecoding-320.png`) });
+      await page.locator('#rail-menu summary').click();
+      await page.screenshot({ path: join(out, `${engine}-people-320.png`) });
+      await page.locator('#rail-menu summary').click();
       await page.locator('.stage [href="#role-asistan-phase-2"]').click();
       await page.waitForFunction(() => document.querySelector('#role-asistan-phase-2').open);
       assert.equal(await page.locator('#role-asistan-phase-2').getAttribute('open'), '');
@@ -114,7 +127,7 @@ try {
       assert.equal(await target.isChecked(), false);
       await page.locator('[data-owner-filter="sen"]').click();
       assert.equal(await page.locator('[data-owner-filter="sen"]').getAttribute('aria-pressed'), 'true');
-      assert.ok((await page.locator('#next-actions .next-meta').allTextContents()).every(text => text.includes('Sen')));
+      assert.ok((await page.locator('#next-actions .next-meta').allTextContents()).every(text => text.includes('İsmail Karaca')));
       await page.evaluate(() => localStorage.setItem('atonota-action-plan:v1', '{broken'));
       await page.reload();
       await page.waitForFunction(() => !document.querySelector('[data-option]').disabled);

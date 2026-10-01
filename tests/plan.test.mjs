@@ -42,3 +42,24 @@ test('rendering escapes untrusted strings; no third-party scripts or event attri
   const html = renderPage(plan);
   assert.doesNotMatch(html, /<script[^>]+src="https?:|\bonclick=|\bonerror=/);
 });
+test('flow and decision owners follow the shared role registry', () => {
+  const renamed = {
+    ...plan,
+    roles: plan.roles.map(role => ({ ...role, name: role.id === 'sen' ? 'Karar sahibi' : role.id === 'ekip' ? 'Vibecoding sahibi' : role.name })),
+  };
+  const html = renderPage(renamed);
+  assert.ok(html.includes('Karar sahibi · Claude iOS'));
+  assert.ok(html.includes('Karar sahibi: eksik kararları tamamla.'));
+  assert.ok(html.includes('Vibecoding sahibi: eksik köprüleri geliştir.'));
+});
+test('DevOps CI waits for the installation package and old completion cannot skip it', () => {
+  const previous = { completed: ['U01', 'U02', 'H01', 'U03', 'U05', 'E01', 'E02', 'E03', 'H02'] };
+  let state = normalizeState(previous, plan);
+  const ci = plan.tasks.find(task => task.id === 'H02');
+  assert.equal(statusOf(ci, state, plan), 'waiting');
+  assert.equal(state.completed.includes('H02'), false);
+  state = transition(state, { type: 'task', id: 'E13', checked: true }, plan);
+  assert.equal(statusOf(ci, state, plan), 'ready');
+  state = transition(state, { type: 'task', id: 'H02', checked: true }, plan);
+  assert.equal(statusOf(ci, state, plan), 'done');
+});
