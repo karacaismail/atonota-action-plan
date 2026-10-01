@@ -103,9 +103,12 @@ function goToHash() {
 document.addEventListener('click', event => {
   const anchor = event.target.closest('a[href^="#"]');
   if (!anchor || !anchor.hash) return;
-  if (anchor.hash === location.hash) { event.preventDefault(); goToHash(); }
+  event.preventDefault();
+  if (anchor.hash !== location.hash) history.pushState(null, '', anchor.hash);
+  goToHash();
 });
 window.addEventListener('hashchange', goToHash);
+window.addEventListener('popstate', goToHash);
 window.addEventListener('storage', event => {
   if (event.key !== key) return;
   try { state = normalizeState(JSON.parse(event.newValue), plan); update(); feedback.textContent = 'İlerleme aynı tarayıcının diğer sekmesinden güncellendi.'; }

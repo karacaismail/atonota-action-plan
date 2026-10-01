@@ -28,6 +28,7 @@ const widths = [320,360,375,390,639,640,641,768,1023,1024,1025,1311,1312,1313,14
 
 try {
   for (const engine of ['chromium', 'firefox', 'webkit']) {
+    console.log(`QA ${engine}: 320-first layout and critical journey`);
     const browser = await playwright[engine].launch(engine === 'chromium' ? { executablePath: playwright.chromium.executablePath() } : {});
     try {
       const context = await browser.newContext({ viewport: { width: 320, height: 800 }, hasTouch: true, reducedMotion: 'reduce' });
@@ -67,7 +68,8 @@ try {
       await first.uncheck();
       assert.equal(await page.locator('[data-complete="U02"]').isChecked(), false);
       assert.equal(await page.locator('[data-complete="U02"]').isDisabled(), true);
-      await page.locator('[data-option="form"]').check();
+      await page.locator('[data-option="form"]').focus();
+      await page.keyboard.press('Space');
       assert.equal(await page.locator('#task-F01').getAttribute('hidden'), null);
       assert.equal(await page.evaluate(() => document.activeElement.dataset.option), 'form');
       await page.locator('[data-option="form"]').uncheck();
