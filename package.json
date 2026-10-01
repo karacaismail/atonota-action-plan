@@ -6,7 +6,7 @@
   "engines": { "node": ">=24 <25" },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "node --check app.mjs && node --check model.mjs && node --check render.mjs && node --check scripts/qa.mjs",
+    "check": "node --check app.mjs && node --check plan.mjs && node --check model.mjs && node --check render.mjs && node --check scripts/build.mjs && node --check scripts/docs.mjs && node --check scripts/page.mjs && node --check scripts/qa.mjs",
     "test": "node --test tests/*.test.mjs",
     "qa": "node scripts/qa.mjs"
   },

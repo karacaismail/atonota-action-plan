@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { plan } from '../plan.mjs';
 import { validatePlan, normalizeState, statusOf, transition } from '../model.mjs';
-import { renderPage, renderTask, renderDependencyLinks, escapeHTML } from '../render.mjs';
+import { renderTask, renderDependencyLinks, escapeHTML } from '../render.mjs';
+import { renderPage } from '../scripts/page.mjs';
 
 test('actual plan has unique IDs, known roles/phases/options and an acyclic graph', () => {
   assert.deepEqual(validatePlan(plan), []);
@@ -49,8 +50,8 @@ test('flow and decision owners follow the shared role registry', () => {
   };
   const html = renderPage(renamed);
   assert.ok(html.includes('Karar ve geliştirme sahibi · Claude iOS'));
-  assert.ok(html.includes('Karar ve geliştirme sahibi: eksik kararları tamamla.'));
-  assert.ok(html.includes('Karar ve geliştirme sahibi: eksik köprüleri geliştir.'));
+  assert.ok(html.includes('Karar ve geliştirme sahibi: kurulum paketini teslim et.'));
+  assert.ok(html.includes('Karar ve geliştirme sahibi: Linux ve uygulamalar için MCP’yi geliştir.'));
 });
 test('one Ismail roadmap owns decisions and development without losing task progress', () => {
   assert.deepEqual(plan.roles.map(role => role.id), ['sen', 'cengiz', 'asistan']);
@@ -59,7 +60,8 @@ test('one Ismail roadmap owns decisions and development without losing task prog
   }
   assert.ok(plan.projects.every(project => project.owner !== 'ekip'));
   const completed = ['U01', 'U02', 'E01', 'E02'];
-  assert.deepEqual(new Set(normalizeState({ completed }, plan).completed), new Set(completed));
+  const completionRevisions = Object.fromEntries(completed.map(id => [id, plan.tasks.find(task => task.id === id).revision ?? 1]));
+  assert.deepEqual(new Set(normalizeState({ completed, completionRevisions }, plan).completed), new Set(completed));
   const html = renderPage(plan);
   assert.equal([...html.matchAll(/class="role-section"/g)].length, 3);
   assert.doesNotMatch(html, /id="role-ekip"|data-owner-filter="ekip"/);
@@ -67,7 +69,7 @@ test('one Ismail roadmap owns decisions and development without losing task prog
 test('DevOps CI waits for the installation package and old completion cannot skip it', () => {
   const previous = {
     completed: ['U01', 'U02', 'H01', 'U03', 'U05', 'E01', 'E02', 'E03', 'H02'],
-    completionRevisions: { H01: 2, U03: 2, U05: 2 },
+    completionRevisions: Object.fromEntries(['U01', 'U02', 'H01', 'U03', 'U05', 'E01', 'E02', 'E03', 'H02'].map(id => [id, plan.tasks.find(task => task.id === id).revision ?? 1])),
   };
   let state = normalizeState(previous, plan);
   const ci = plan.tasks.find(task => task.id === 'H02');
@@ -85,8 +87,8 @@ test('known application routes and upstream repos are recorded, not requested ag
     'Open Design': 'wb.atonota.net/od',
     Penpot: 'wb.atonota.net/pp',
     Blender: 'wb.atonota.net/b3d',
-    Affinity: 'wb.atonota.net/ad',
-    'Storybook beta / RC': 'wb.atonota.net/sbbeta · wb.atonota.net/sbrc',
+    'Affinity Designer': 'wb.atonota.net/ad',
+    'Storybook Beta / RC': 'wb.atonota.net/sbbeta · wb.atonota.net/sbrc',
   };
   for (const [name, address] of Object.entries(expectedAddresses)) {
     assert.equal(plan.projects.find(project => project.name === name).address, address, name);
@@ -94,9 +96,9 @@ test('known application routes and upstream repos are recorded, not requested ag
   assert.match(plan.projects.find(project => project.name === 'Open Design').repo, /https:\/\/github\.com\/nexu-io\/open-design/);
   assert.match(plan.projects.find(project => project.name === 'Penpot').repo, /https:\/\/github\.com\/penpot\/penpot/);
   const sourcePreparation = plan.tasks.find(task => task.id === 'E01');
-  assert.match(sourcePreparation.output, /kendi upstream reposu/);
+  assert.match(sourcePreparation.output, /Hazır uygulama upstream/);
   assert.match(sourcePreparation.output, /karacaismail/);
-  assert.match(sourcePreparation.accept, /mevcut lisans/);
+  assert.match(sourcePreparation.accept, /Upstream yazarlığı\/lisansı korunur/);
 });
 test('pending business inventory and license do not block known Workbench preparation', () => {
   let state = normalizeState(null, plan);
@@ -116,9 +118,8 @@ test('pending business inventory and license do not block known Workbench prepar
   assert.equal(state.completed.includes('U05'), false);
 });
 test('license selection stays an explicit user task without repo arrangement approval', () => {
-  const inventory = plan.tasks.find(task => task.id === 'U01');
   const license = plan.tasks.find(task => task.id === 'U02');
-  assert.match(inventory.output, /Teknik uygulama\/adres envanteri kayıtlı/);
+  assert.match(plan.scope.later, /Şirket listesi.*bekletmez/);
   assert.match(license.title, /özgün kod.*lisans/);
   assert.doesNotMatch(license.title, /repo.*onayla/);
   assert.match(license.accept, /Public görünürlük lisans değildir/);
@@ -139,26 +140,26 @@ test('original-code license remains a final acceptance gate, not a preparation g
 });
 test('Workbench uses the separate declared dedicated server, leaving Frappe hosts untouched', () => {
   const inventory = plan.tasks.find(task => task.id === 'H01');
-  assert.match(inventory.output, /ayrı dedicated Hetzner AMD EPYC · 128 GB RAM/);
-  assert.match(inventory.output, /kullanıcı beyanı/);
-  assert.match(inventory.output, /Dört Frappe sunucusu kurulu/);
-  assert.match(inventory.accept, /Frappe sunucularına dokunma/);
-  assert.match(inventory.accept, /CCX43 satınalma ekranını.*kanıtı sayma/);
-  assert.match(inventory.accept, /Secret\/IP\/ham ekran görüntüsü/);
+  const facts = plan.knownDecisions.find(decision => decision.label === 'Sunucu ayrı').text;
+  assert.match(facts, /Dedicated AMD EPYC, 128 GB RAM kullanıcı beyanıdır/);
+  assert.match(facts, /Kurulu dört press-\* Frappe sunucusu kapsam dışıdır/);
+  assert.match(inventory.accept, /Frappe sunucusuna dokunulmaz/);
+  assert.match(inventory.accept, /cloud teklif ekranı dedicated kanıtı değildir/);
+  assert.match(inventory.steps.join(' '), /IP\/secret ve ham ekranı public plana koyma/);
 });
 test('technical actions use known decisions without asking Ismail to pick them again', () => {
   assert.equal(plan.tasks.find(task => task.id === 'U03').role, 'cengiz');
   assert.equal(plan.tasks.find(task => task.id === 'U05').role, 'cengiz');
   const brief = plan.tasks.find(task => task.id === 'U04');
-  assert.match(brief.output, /mobile-first lingerie product ecommerce home/);
-  assert.match(brief.output, /önizleme.*URL/);
+  assert.match(brief.output, /Mobile-first lingerie product ecommerce home/);
+  assert.match(brief.output, /sonuç URL/);
   assert.doesNotMatch(brief.title, /hedef.*seç|çıktı.*seç/);
-  assert.match(plan.tasks.find(task => task.id === 'U05').accept, /makine\/oturum/);
+  assert.match(plan.tasks.find(task => task.id === 'U05').output, /Windows\/Mac host/);
 });
 test('task output and acceptance are disclosed while status and dependencies stay visible', () => {
   const task = plan.tasks.find(task => task.id === 'E02');
   const html = renderTask(task, normalizeState(null, plan), plan);
-  assert.match(html, /<details class="task-detail"[^>]*><summary>Çıktı ve kabul/);
+  assert.match(html, /<details class="task-detail"[^>]*><summary>Teslim ve kontrol/);
   assert.doesNotMatch(html, /<details class="task-detail"[^>]*\bopen\b/);
   assert.match(html, /<\/details>\s*<div class="dependencies"/);
   assert.match(html, /data-task-status="E02"/);
@@ -174,8 +175,9 @@ test('flow diagram states and conditional branches derive from actual plan progr
   let state = transition(normalizeState(null, plan), { type: 'task', id: 'E01', checked: true }, plan);
   state = transition(state, { type: 'option', id: 'form', checked: true }, plan);
   const progressed = renderPage(plan, state);
-  assert.match(progressed, /<li[^>]*data-flow-task="E01"[^>]*data-status="done"/);
-  assert.match(progressed, /<li[^>]*data-flow-task="E03"[^>]*data-status="ready"/);
+  assert.match(progressed, /data-flow-task="E01"[^>]*data-status="done"/);
+  assert.match(renderTask(plan.tasks.find(task => task.id === 'E01'), state, plan), /data-status="done"/);
+  assert.equal(statusOf(plan.tasks.find(task => task.id === 'E03'), state, plan), 'ready');
   assert.doesNotMatch(progressed, /class="branch-node"[^>]*data-branch="form"[^>]*hidden/);
   assert.match(progressed, /data-flow-task="F01"[^>]*data-status="ready"/);
   for (const [, id] of progressed.matchAll(/data-flow-task="([^"]+)"/g)) assert.ok(plan.tasks.some(task => task.id === id));
@@ -184,7 +186,7 @@ test('overview links to the real Workbench site and records known facts separate
   const html = renderPage(plan);
   assert.match(html, /class="overview-action" href="https:\/\/karacaismail\.github\.io\/atonota-workbench\/" target="_blank" rel="noopener noreferrer"/);
   assert.match(html, /class="known-decisions"/);
-  assert.match(html, /Dört Frappe sunucusu kapsam dışı/);
+  assert.match(html, /Kurulu dört press-\* Frappe sunucusu kapsam dışıdır/);
   assert.doesNotMatch(html, /Şirket\/girişim listesi, domain sahipliği, lisans, erişim sınırları, ilk iş\/çıktı türü/);
 });
 test('branch map uses actual prerequisites, not adjacent same-phase tasks', () => {
@@ -197,7 +199,7 @@ test('branch map uses actual prerequisites, not adjacent same-phase tasks', () =
   assert.doesNotMatch(source, /href="#task-FA01"|href="#task-FH01"/);
   assert.match(renderDependencyLinks(dnsApply, state, plan), /href="#task-FH01"/);
   state = transition(state, { type: 'task', id: 'F01', checked: true }, plan);
-  assert.match(renderDependencyLinks(formBuild, state, plan), />F01 · tamam<\/a>/);
+  assert.match(renderDependencyLinks(formBuild, state, plan), /İsmail Karaca · F01 · tamam<\/span><\/a>/);
   assert.match(renderPage(plan, state), /class="flow-list dependency-map"/);
 });
 test('old v1 decisions do not silently complete the new dedicated-server technical checks', () => {
@@ -206,17 +208,21 @@ test('old v1 decisions do not silently complete the new dedicated-server technic
     options: { form: true },
   };
   const state = normalizeState(legacy, plan);
-  assert.deepEqual(new Set(state.completed), new Set(['U01', 'U02', 'A01', 'E01', 'E03']));
+  assert.deepEqual(new Set(state.completed), new Set(['U02', 'A01', 'E01']));
   assert.equal(state.options.form, true);
   for (const id of ['H01', 'U03', 'U04', 'U05']) {
-    assert.equal(plan.tasks.find(task => task.id === id).revision, 2);
+    assert.equal(plan.tasks.find(task => task.id === id).revision, 3);
     assert.equal(state.completed.includes(id), false);
   }
   assert.equal(statusOf(plan.tasks.find(task => task.id === 'H03'), state, plan), 'waiting');
   let current = transition(state, { type: 'task', id: 'H01', checked: true }, plan);
   current = transition(current, { type: 'task', id: 'U03', checked: true }, plan);
-  assert.equal(current.completionRevisions.H01, 2);
-  assert.equal(current.completionRevisions.U03, 2);
+  assert.equal(current.completionRevisions.H01, 3);
+  assert.equal(current.completionRevisions.U03, 3);
+  assert.equal(statusOf(plan.tasks.find(task => task.id === 'H03'), current, plan), 'waiting');
+  for (const id of ['U01', 'E02', 'E03', 'E13']) {
+    current = transition(current, { type: 'task', id, checked: true }, plan);
+  }
   assert.equal(statusOf(plan.tasks.find(task => task.id === 'H03'), current, plan), 'ready');
   assert.deepEqual(normalizeState(JSON.parse(JSON.stringify(current)), plan), current);
 });

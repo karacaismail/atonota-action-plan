@@ -4,6 +4,8 @@ import { readFile, mkdir, writeFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { platform, release, arch } from 'node:os';
+import { plan } from '../plan.mjs';
 
 const require = createRequire(import.meta.url);
 const playwright = require(process.env.PLAYWRIGHT_PATH || 'playwright');
@@ -11,25 +13,31 @@ const directory = fileURLToPath(new URL('../site/', import.meta.url));
 const out = process.env.QA_DIR || fileURLToPath(new URL('../qa-results/', import.meta.url));
 await mkdir(out, { recursive: true });
 const allowed = new Set(['index.html', 'styles.css', 'app.mjs', 'model.mjs', 'plan.mjs', 'render.mjs', 'favicon.svg']);
+const guides = ['ismail-karaca', 'huseyin-cengiz', 'asistan-huseyin', 'genel-yol'].map(name => `docs/${name}.md`);
+const served = new Set([...allowed, ...guides, 'build-manifest.json']);
 const server = createServer(async (request, response) => {
   const path = new URL(request.url, 'http://localhost').pathname;
   const file = path === '/' ? 'index.html' : path.slice(1);
-  if (!allowed.has(file)) { response.writeHead(404); response.end(); return; }
+  if (!served.has(file)) { response.writeHead(404); response.end(); return; }
   try {
     const data = await readFile(join(directory, file));
-    response.setHeader('Content-Type', file.endsWith('.mjs') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.svg') ? 'image/svg+xml' : 'text/html');
+    response.setHeader('Content-Type', file.endsWith('.mjs') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.svg') ? 'image/svg+xml' : file.endsWith('.md') ? 'text/markdown; charset=utf-8' : file.endsWith('.json') ? 'application/json' : 'text/html');
     response.end(data);
   } catch { response.writeHead(404); response.end(); }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = process.env.QA_URL || `http://127.0.0.1:${server.address().port}/`;
 const results = [];
+const browserVersions = {};
+const startedAt = new Date().toISOString();
+const localManifest = JSON.parse(await readFile(join(directory, 'build-manifest.json'), 'utf8'));
 const widths = [320,360,375,390,639,640,641,768,1023,1024,1025,1311,1312,1313,1440];
 
 try {
   for (const engine of ['chromium', 'firefox', 'webkit']) {
     console.log(`QA ${engine}: 320-first layout and critical journey`);
     const browser = await playwright[engine].launch(engine === 'chromium' ? { executablePath: playwright.chromium.executablePath() } : {});
+    browserVersions[engine] = browser.version();
     try {
       const context = await browser.newContext({ viewport: { width: 320, height: 800 }, hasTouch: true, reducedMotion: 'reduce', locale: 'tr-TR', timezoneId: 'Europe/Istanbul', deviceScaleFactor: 1, serviceWorkers: 'block' });
       const page = await context.newPage();
@@ -52,6 +60,24 @@ try {
       assert.equal(await page.locator('#akislar > .flow').count(), 4);
       assert.equal(await page.locator('#detail-U01').getAttribute('open'), null);
       assert.equal(await page.locator('#meta-U01').isVisible(), false);
+      assert.equal(await page.locator('#task-U01 .task-steps').isVisible(), true);
+      assert.ok(await page.locator('#task-U01 .task-steps li').count() >= 2);
+      const readableSteps = await page.locator('#task-U01 .task-steps').evaluate(element => ({ fontSize: parseFloat(getComputedStyle(element).fontSize), width: element.getBoundingClientRect().width, taskWidth: element.closest('.task').getBoundingClientRect().width }));
+      assert.ok(readableSteps.fontSize >= 16 && readableSteps.width >= readableSteps.taskWidth - 32, `${engine} 320px full-width reading steps`);
+      assert.match(await page.locator('#task-U01 .task-title').textContent(), /PoC/);
+      assert.equal(await page.locator('[data-option="blenderCloud"]').count(), 0);
+      assert.match(await page.locator('.project').filter({ hasText: 'wb.atonota.net/b3d' }).textContent(), /Sürüyor|sürüyor|devam/);
+      for (const file of guides) {
+        assert.equal(await page.locator(`a[href^="./${file}"][download]`).count(), 1, `${engine} guide download ${file}`);
+        const response = await page.request.get(new URL(file, url).href);
+        assert.equal(response.status(), 200, file);
+        const guide = await response.text();
+        if (file === 'docs/genel-yol.md') {
+          assert.ok(guide.includes('DNS akışı:') && guide.includes('Aşama bittiğinde:'), `${engine} general guide has the handoff and phase exits`);
+        } else {
+          assert.ok(guide.includes('Teslim:') && guide.includes('Kime ilet:') && guide.includes('İşi kapatmadan kontrol et:'), `${engine} person guide has actionable delivery and acceptance`);
+        }
+      }
       await page.locator('#detail-U01 > summary').click();
       assert.equal(await page.locator('#meta-U01').isVisible(), true);
       await page.locator('#detail-U01 > summary').click();
@@ -61,6 +87,14 @@ try {
       await page.evaluate(() => scrollTo({ top:0, behavior:'instant' }));
       await page.screenshot({ path: join(out, `${engine}-mobile-top.png`) });
       const coldResources = await page.evaluate(() => [...performance.getEntriesByType('navigation'), ...performance.getEntriesByType('resource')].map(entry => ({ name: entry.name, encodedBytes: entry.encodedBodySize, transferBytes: entry.transferSize })));
+      assert.equal(coldResources.some(resource => new URL(resource.name).pathname.includes('/docs/')), false, `${engine} guides are on-demand`);
+      const manifestResponse = await page.request.get(new URL('build-manifest.json', url).href);
+      assert.equal(manifestResponse.status(), 200);
+      const manifest = await manifestResponse.json();
+      assert.equal(manifest.contentVersion, localManifest.contentVersion, `${engine} serves the current built release`);
+      const versionedRequests = coldResources.filter(resource => /\.(mjs|css|svg)$/.test(new URL(resource.name).pathname));
+      assert.ok(versionedRequests.length >= 5);
+      assert.ok(versionedRequests.every(resource => new URL(resource.name).searchParams.get('v') === manifest.contentVersion), `${engine} one release version across all client assets`);
       await page.keyboard.press('Tab');
       // WebKit's default link tabbing policy differs; test activation from the
       // actual skip control without pretending to cover real Safari settings.
@@ -221,17 +255,21 @@ try {
       assert.equal(await page.evaluate(() => document.activeElement.dataset.option), 'form');
       assert.equal(await page.locator('[data-branch="form"]').isVisible(), false);
       await peer.close();
+      await page.setViewportSize({ width: 320, height: 800 });
       await page.locator('#rail-menu summary').click();
       await page.locator('.rail [href="#role-cengiz"]').click();
       assert.equal(await page.evaluate(() => document.activeElement.tagName), 'SUMMARY');
       assert.equal(await page.evaluate(() => document.activeElement.closest('.role-section').id), 'role-cengiz');
+      if (await page.locator('#role-cengiz-phase-0').getAttribute('open') === null) await page.locator('#role-cengiz-phase-0 > summary').click();
+      assert.equal(await page.evaluate(() => innerWidth), 320, `${engine} Cengiz screenshot is genuinely 320 CSS px`);
+      await page.screenshot({ path: join(out, `${engine}-devops-320.png`) });
       const ids = await page.locator('[id]').evaluateAll(elements => elements.map(element => element.id));
       assert.equal(new Set(ids).size, ids.length);
       assert.deepEqual(errors, []);
       assert.deepEqual(badResponses, []);
       assert.ok(requests.every(request => new URL(request).origin === new URL(url).origin));
       const bytes = (await page.evaluate(() => performance.getEntriesByType('resource').map(entry => ({ name: entry.name, bytes: entry.encodedBodySize }))));
-      results.push({ engine, browserVersion:browser.version(), os:process.platform, interactions: 'pass', focus, keyboardFocus:focusStyle, coldResources, warmResources:bytes, scriptErrors: errors, networkErrors: badResponses, physicalDevice: 'not_run' });
+      results.push({ engine, browserVersion:browser.version(), os:process.platform, interactions: 'pass', readableSteps, onDemandGuides:'pass', contentVersion:manifest.contentVersion, versionedAssets:'pass', focus, keyboardFocus:focusStyle, coldResources, warmResources:bytes, scriptErrors: errors, networkErrors: badResponses, physicalDevice: 'not_run' });
       await context.close();
       const noJS = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 320, height: 800 } });
       const staticPage = await noJS.newPage(); await staticPage.goto(url);
@@ -246,8 +284,8 @@ try {
       await legacyPage.evaluate(() => localStorage.setItem('atonota-action-plan:v1', JSON.stringify({ completed:['H01','U03','U04','U05','H03','U01','U02','A01','E01','E03'],options:{form:true} })));
       await legacyPage.reload();
       await legacyPage.waitForFunction(() => !document.querySelector('[data-option]').disabled);
-      for(const id of ['H01','U03','U04','U05','H03']) assert.equal(await legacyPage.locator(`[data-complete="${id}"]`).isChecked(),false,`${engine} legacy ${id} requires renewed acceptance`);
-      for(const id of ['U01','U02','A01','E01','E03']) assert.equal(await legacyPage.locator(`[data-complete="${id}"]`).isChecked(),true,`${engine} unrelated valid ${id} survives migration`);
+      for(const id of ['H01','U03','U04','U05','H03','U01','E03']) assert.equal(await legacyPage.locator(`[data-complete="${id}"]`).isChecked(),false,`${engine} legacy ${id} requires renewed acceptance`);
+      for(const id of ['U02','A01','E01']) assert.equal(await legacyPage.locator(`[data-complete="${id}"]`).isChecked(),true,`${engine} unrelated valid ${id} survives migration`);
       assert.equal(await legacyPage.locator('[data-option="form"]').isChecked(),true);
       assert.equal(await legacyPage.locator('[data-complete="H03"]').isDisabled(),true);
       assert.match(await legacyPage.locator('#feedback').textContent(),/yeniden/i);
@@ -258,10 +296,17 @@ try {
       await legacyPage.waitForFunction(() => !document.querySelector('[data-option]').disabled);
       assert.equal(await legacyPage.locator('[data-complete="H01"]').isChecked(),true);
       assert.equal(await legacyPage.locator('[data-complete="U03"]').isChecked(),true);
+      assert.equal(await legacyPage.locator('[data-complete="H03"]').isDisabled(),true);
+      // Private package start must also wait for the actual versioned PoC handoff.
+      for (const id of ['U01','E02','E03','E13']) {
+        const phase = legacyPage.locator(`#task-${id}`).locator('xpath=ancestor::details[contains(@class,"role-phase")]');
+        if (!(await phase.evaluate(element => element.open))) await phase.locator(':scope > summary').click();
+        await legacyPage.locator(`[data-complete="${id}"]`).check();
+      }
       assert.equal(await legacyPage.locator('[data-complete="H03"]').isDisabled(),false);
       const migrated = await legacyPage.evaluate(() => JSON.parse(localStorage.getItem('atonota-action-plan:v1')));
-      assert.equal(migrated.completionRevisions.H01,2);
-      assert.equal(migrated.completionRevisions.U03,2);
+      assert.equal(migrated.completionRevisions.H01,plan.tasks.find(task => task.id === 'H01').revision);
+      assert.equal(migrated.completionRevisions.U03,plan.tasks.find(task => task.id === 'U03').revision);
       await legacy.close();
       results.push({engine,legacyTaskRevisionMigration:'pass',unrelatedProgressPreserved:'pass',renewedCompletionReload:'pass'});
       const blocked = await browser.newContext({ viewport: { width: 320, height: 800 } });
@@ -314,6 +359,6 @@ try {
   const files = await Promise.all([...allowed].map(async file => ({ file, bytes: (await stat(join(directory, file))).size })));
   const total = files.reduce((sum, file) => sum + file.bytes, 0);
   assert.ok(total <= 200 * 1024, `Raw delivered page+assets exceed 200KiB: ${total}`);
-  await writeFile(join(out, 'results.json'), JSON.stringify({ url, version: require(`${process.env.PLAYWRIGHT_PATH || 'playwright'}/package.json`).version, node: process.version, rawBytes: total, files, results, physicalDevices: 'not_run', screenReader: 'not_run' }, null, 2));
+  await writeFile(join(out, 'results.json'), JSON.stringify({ url, startedAt, completedAt: new Date().toISOString(), contentVersion: localManifest.contentVersion, environment: { platform: platform(), release: release(), arch: arch(), browserVersions, emulated: true }, version: require(`${process.env.PLAYWRIGHT_PATH || 'playwright'}/package.json`).version, node: process.version, rawBytes: total, rawByteBasis: 'local production build; live manifest version and cold browser requests checked separately', files, results, physicalDevices: 'not_run', screenReader: 'not_run' }, null, 2));
   console.log(JSON.stringify({ result: 'pass', cases: results.length, rawBytes: total, evidence: out }));
 } finally { await new Promise(resolve => server.close(resolve)); }
