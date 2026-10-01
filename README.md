@@ -7,9 +7,11 @@ Genel yol haritası, kişi/aşama bağlantıları, görev bağımlılıkları ve
 
 ## Görev sahipleri
 
-- İsmail Karaca: kararlar, vibecoding, public ürün repo içerikleri ve GitHub'a gönderim. Geliştirme katılımcıları İsmail Karaca, Codex ve Claude Code'dur; ayrıca bir insan ekip varsayılmaz.
+- İsmail Karaca: kararlar, geliştirme, onay, public ürün repo içerikleri ve GitHub'a gönderim; tek birleşik yol haritası. Codex ve Claude Code kullandığı vibecoding araçlarıdır, ayrı görev sahipleri değildir.
 - Hüseyin Cengiz: server runtime/güvenlik, CI/CD teknik kurulumu, deploy/rollback ve teslim doğrulaması.
 - Asistan Hüseyin: Hüseyin Cengiz'in teknik föyündeki GoDaddy/DNS işlemleri.
+
+Yalnız bu üç kişinin sahibi/filtre/yol haritası bulunur; ikinci İsmail veya ayrı geliştirme ekibi kaydı yoktur.
 
 İsmail Karaca kurulabilir ürün/servisleri Mac'te Colima ile geliştirir. Teslim paketi: Dockerfile, Compose, `.env.example`, kilitli bağımlılıklar, CI, healthcheck ve README; hedef `linux/amd64` / Hetzner AMD EPYC, belgelenmiş tek komutla kurulum. Doğrulanmış sürüm paketini Hüseyin Cengiz'e devreder. Bunlar ürün yol haritası görevleridir; bu repoda hazır ürün kurulum scripti bulunduğu anlamına gelmez. Statik plan sitesi GitHub Pages'te çalışır, container gerekmez.
 

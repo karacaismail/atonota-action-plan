@@ -1,5 +1,5 @@
 import { plan } from './plan.mjs';
-import { normalizeState, transition, statusOf, dependenciesOf, isActive } from './model.mjs';
+import { normalizeState, transition, statusOf, dependenciesOf, isActive, canonicalAnchor } from './model.mjs';
 import { escapeHTML, renderNext, statusLabels } from './render.mjs';
 
 const key = 'atonota-action-plan:v1';
@@ -129,8 +129,10 @@ for (const button of document.querySelectorAll('[data-owner-filter]')) {
 }
 
 function goToHash() {
-  const id = location.hash.slice(1);
+  const requested = location.hash.slice(1);
+  const id = canonicalAnchor(requested);
   if (!id) return;
+  if (id !== requested) history.replaceState(null, '', `#${id}`);
   const target = document.getElementById(id);
   if (!target || target.hidden) return;
   const details = target.matches('details') ? target : target.closest('details');

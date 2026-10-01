@@ -42,15 +42,27 @@ try {
       await page.goto(url);
       await page.waitForFunction(() => !document.querySelector('[data-option]').disabled);
       assert.equal(await page.locator('#heading-sen').textContent(), 'İsmail Karaca');
-      assert.equal(await page.locator('#heading-ekip').textContent(), 'İsmail Karaca + Codex + Claude Code');
-      assert.match(await page.locator('#role-ekip > p').textContent(), /sorumlusu İsmail Karaca/);
+      assert.equal(await page.locator('.role-section').count(), 3);
+      assert.equal(await page.locator('main').getAttribute('tabindex'), null);
+      assert.equal(await page.locator('#heading-ekip, [data-owner-filter="ekip"]').count(), 0);
+      assert.equal(await page.locator('#role-sen #task-U01, #role-sen #task-E13').count(), 2);
+      assert.match(await page.locator('#role-sen > p').textContent(), /Codex ve Claude Code/);
       assert.equal(await page.getByRole('link', { name: 'Sen', exact: true }).count(), 0);
       assert.equal(await page.getByRole('link', { name: 'Geliştirme ekibi', exact: true }).count(), 0);
       const coldResources = await page.evaluate(() => [...performance.getEntriesByType('navigation'), ...performance.getEntriesByType('resource')].map(entry => ({ name: entry.name, encodedBytes: entry.encodedBodySize, transferBytes: entry.transferSize })));
+      await page.keyboard.press('Tab');
+      // WebKit's default link tabbing policy differs; test activation from the
+      // actual skip control without pretending to cover real Safari settings.
+      await page.locator('.skip-link').focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await page.evaluate(() => location.hash), '#main');
+      assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), '#simdi');
       for (const width of widths) {
         await page.setViewportSize({ width, height: 800 });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${engine} overflow ${width}`);
         assert.equal(await page.locator('h1').count(), 1);
+        const gutters = await page.locator('#role-sen .role-heading, #role-sen > p, #role-sen .role-phase > summary, #role-sen #task-U01').evaluateAll(elements => elements.map(element => ({ left:parseFloat(getComputedStyle(element).paddingLeft), right:parseFloat(getComputedStyle(element).paddingRight) })));
+        assert.ok(gutters.every(gutter => gutter.left >= 12 && gutter.right >= 12), `${engine} role surface gutters ${width}`);
         if ([320,390,1440].includes(width)) await page.screenshot({ path: join(out, `${engine}-${width}.png`), fullPage: width === 1440 });
         results.push({ engine, viewport: `${width}x800`, input: 'touch + keyboard', layout: 'pass' });
       }
@@ -60,9 +72,16 @@ try {
         results.push({ engine, viewport, shortHeight: 'pass', capabilities: await page.evaluate(() => ({ coarse:matchMedia('(any-pointer:coarse)').matches, fine:matchMedia('(any-pointer:fine)').matches, hover:matchMedia('(hover:hover)').matches })) });
       }
       await page.setViewportSize({ width: 320, height: 800 });
-      await page.locator('.stage [href="#role-ekip-phase-1"]').click();
-      assert.equal(await page.locator('#role-ekip-phase-1').getAttribute('open'), '');
-      assert.equal(await page.evaluate(() => document.activeElement.parentElement.id), 'role-ekip-phase-1');
+      await page.locator('.stage [href="#role-sen-phase-1"]').click();
+      assert.equal(await page.locator('#role-sen-phase-1').getAttribute('open'), '');
+      assert.equal(await page.evaluate(() => document.activeElement.parentElement.id), 'role-sen-phase-1');
+      // Shared development links keep working after owner consolidation.
+      await page.goto(`${url}#role-ekip-phase-1`);
+      await page.waitForFunction(() => location.hash === '#role-sen-phase-1');
+      assert.equal(await page.locator('#role-sen-phase-1').getAttribute('open'), '');
+      assert.equal(await page.evaluate(() => document.activeElement.parentElement.id), 'role-sen-phase-1');
+      const sectionFrames = await page.locator('main, #kisiler, #role-sen, #role-sen-phase-1').evaluateAll(elements => elements.map(element => { const style=getComputedStyle(element); return { outline:style.outlineStyle,left:parseFloat(style.borderLeftWidth),right:parseFloat(style.borderRightWidth),shadow:style.boxShadow }; }));
+      assert.ok(sectionFrames.every(frame => frame.outline === 'none' && frame.left === 0 && frame.right === 0 && frame.shadow === 'none'), `${engine} no section-wide frame`);
       assert.match(await page.locator('#task-E13').textContent(), /linux\/amd64/);
       await page.screenshot({ path: join(out, `${engine}-vibecoding-320.png`) });
       await page.locator('#rail-menu summary').click();
@@ -90,10 +109,17 @@ try {
       assert.equal(focusStyle.parentStyle, 'none');
       assert.equal(focusStyle.shadow, 'none');
       await page.locator('[data-complete="U02"]').check();
+      if (await page.locator('#role-sen-phase-1').getAttribute('open') === null) await page.locator('#role-sen-phase-1 > summary').click();
+      await page.locator('[data-complete="E01"]').check();
       await page.reload();
       await page.waitForFunction(() => !document.querySelector('[data-option]').disabled);
       assert.equal(await first.isChecked(), true);
       assert.equal(await page.locator('[data-complete="U02"]').isChecked(), true);
+      assert.equal(await page.locator('[data-complete="E01"]').isChecked(), true);
+      await page.evaluate(() => { location.hash = '#role-ekip'; });
+      await page.waitForFunction(() => location.hash === '#role-sen');
+      assert.equal(await page.evaluate(() => document.activeElement.closest('.role-section').id), 'role-sen');
+      assert.equal(await page.locator('#role-ekip').count(), 0);
       await first.uncheck();
       assert.equal(await page.locator('[data-complete="U02"]').isChecked(), false);
       assert.equal(await page.locator('[data-complete="U02"]').isDisabled(), true);

@@ -56,6 +56,7 @@
   --space-16: 4rem;
   --space-20: 5rem;
   --gutter: clamp(.875rem, 3vw, 2.5rem);
+  --surface-gutter: var(--space-3);
   --section-gap: clamp(3rem, 7vw, 6rem);
   --layout-gap: clamp(2rem, 5vw, 4.5rem);
   --page-width: 90rem;
@@ -74,6 +75,7 @@
   --rule-width: 1px;
   --focus-width: 2px;
   --focus-offset: 4px;
+  --focus-offset-inset: calc(var(--focus-width) * -1);
   --radius-control: 0;
   --radius-surface: 0;
   --shadow-none: none;
@@ -313,21 +315,22 @@ input[type="checkbox"]:disabled { opacity: .55; cursor: not-allowed; }
 .project-address { display: block; font-family: var(--font-code); font-size: var(--font-meta); margin-block: var(--space-2); overflow-wrap: anywhere; }
 a.project-address { display: flex; align-items: center; min-block-size: var(--control-target); }
 .project-note { color: var(--color-text-secondary); font-size: var(--font-meta); }
-.role-section { padding-block-start: var(--space-2); }
+.role-section { padding-block: var(--space-3); }
 .role-section + .role-section { margin-block-start: var(--space-10); }
-.role-section > p { color: var(--color-text-secondary); max-inline-size: var(--reading-width); margin-block-end: var(--space-5); }
+.role-section > p { color: var(--color-text-secondary); max-inline-size: var(--reading-width); margin-block-end: var(--space-5); padding-inline: var(--surface-gutter); }
 .role-section:target, .task:target { background: var(--color-surface); }
-.role-heading { display: flex; flex-direction: column; gap: var(--space-2); margin-block-end: var(--space-4); }
+.role-heading { display: flex; flex-direction: column; gap: var(--space-2); margin-block-end: var(--space-4); padding-inline: var(--surface-gutter); }
 .role-heading span, .role-heading small { color: var(--color-text-muted); font-size: var(--font-meta); font-weight: var(--weight-normal); }
 .role-summary { color: var(--color-text-secondary); max-inline-size: var(--reading-width); white-space: nowrap; }
 .role-phases { display: grid; }
 .role-phase { border-block-start: var(--rule-width) solid var(--color-rule); }
 .role-phase > summary {
+  --focus-offset: var(--focus-offset-inset);
   display: flex;
   align-items: center;
   gap: var(--space-3);
   justify-content: space-between;
-  padding-block: var(--space-4);
+  padding: var(--space-4) var(--surface-gutter);
   min-block-size: var(--control-target);
   cursor: pointer;
   list-style: none;
@@ -345,7 +348,7 @@ a.project-address { display: flex; align-items: center; min-block-size: var(--co
   display: grid;
   grid-template-columns: var(--control-target) minmax(0, 1fr);
   gap: var(--space-2);
-  padding-block: var(--space-4);
+  padding: var(--space-4) var(--surface-gutter);
   min-inline-size: 0;
 }
 .task + .task { border-block-start: var(--rule-width) solid var(--color-rule); }
@@ -385,7 +388,7 @@ a.project-address { display: flex; align-items: center; min-block-size: var(--co
   :root { --control-target: 3rem; }
 }
 @media (min-width: 40rem) {
-  :root { --font-metric: 2rem; }
+  :root { --font-metric: 2rem; --surface-gutter: var(--space-4); }
   .summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .hero { margin-block-end: var(--space-10); }
   .notice { padding: var(--space-4); margin-block: var(--space-6); }

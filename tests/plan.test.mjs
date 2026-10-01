@@ -45,12 +45,24 @@ test('rendering escapes untrusted strings; no third-party scripts or event attri
 test('flow and decision owners follow the shared role registry', () => {
   const renamed = {
     ...plan,
-    roles: plan.roles.map(role => ({ ...role, name: role.id === 'sen' ? 'Karar sahibi' : role.id === 'ekip' ? 'Vibecoding sahibi' : role.name })),
+    roles: plan.roles.map(role => ({ ...role, name: role.id === 'sen' ? 'Karar ve geliştirme sahibi' : role.name })),
   };
   const html = renderPage(renamed);
-  assert.ok(html.includes('Karar sahibi · Claude iOS'));
-  assert.ok(html.includes('Karar sahibi: eksik kararları tamamla.'));
-  assert.ok(html.includes('Vibecoding sahibi: eksik köprüleri geliştir.'));
+  assert.ok(html.includes('Karar ve geliştirme sahibi · Claude iOS'));
+  assert.ok(html.includes('Karar ve geliştirme sahibi: eksik kararları tamamla.'));
+  assert.ok(html.includes('Karar ve geliştirme sahibi: eksik köprüleri geliştir.'));
+});
+test('one Ismail roadmap owns decisions and development without losing task progress', () => {
+  assert.deepEqual(plan.roles.map(role => role.id), ['sen', 'cengiz', 'asistan']);
+  for (const id of ['U01', 'E01', 'E13', 'U08', 'F02', 'B02', 'N02']) {
+    assert.equal(plan.tasks.find(task => task.id === id).role, 'sen', id);
+  }
+  assert.ok(plan.projects.every(project => project.owner !== 'ekip'));
+  const completed = ['U01', 'U02', 'E01', 'E02'];
+  assert.deepEqual(new Set(normalizeState({ completed }, plan).completed), new Set(completed));
+  const html = renderPage(plan);
+  assert.equal([...html.matchAll(/class="role-section"/g)].length, 3);
+  assert.doesNotMatch(html, /id="role-ekip"|data-owner-filter="ekip"/);
 });
 test('DevOps CI waits for the installation package and old completion cannot skip it', () => {
   const previous = { completed: ['U01', 'U02', 'H01', 'U03', 'U05', 'E01', 'E02', 'E03', 'H02'] };

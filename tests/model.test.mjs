@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeState, statusOf, transition, validatePlan } from '../model.mjs';
+import { normalizeState, statusOf, transition, validatePlan, canonicalAnchor } from '../model.mjs';
 
 const plan = {
   options: [{ id: 'form' }],
@@ -13,6 +13,11 @@ const plan = {
   ],
 };
 const fresh = () => normalizeState(null, plan);
+test('old development links target the single Ismail roadmap only', () => {
+  assert.equal(canonicalAnchor('role-ekip'), 'role-sen');
+  assert.equal(canonicalAnchor('role-ekip-phase-1'), 'role-sen-phase-1');
+  for (const id of ['role-sen-phase-0', 'task-E13', 'role-cengiz', 'role-ekip-other', '']) assert.equal(canonicalAnchor(id), id);
+});
 
 test('first action ready, downstream waiting, optional path inactive', () => {
   assert.equal(statusOf(plan.tasks[0], fresh(), plan), 'ready');

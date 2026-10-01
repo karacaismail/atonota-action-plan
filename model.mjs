@@ -1,4 +1,6 @@
 export const isActive = (task, state) => !task.when || state.options[task.when] === true;
+// Older shared development URLs now lead to Ismail's single roadmap.
+export const canonicalAnchor = id => /^role-ekip(?:-phase-\d+)?$/.test(id) ? id.replace('role-ekip', 'role-sen') : id;
 
 export function dependenciesOf(task, state, plan) {
   const optional = (task.optionalDepends ?? []).filter(id => {
