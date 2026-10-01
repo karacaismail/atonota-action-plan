@@ -1,0 +1,6 @@
+site/
+node_modules/
+qa-results/
+.env
+.env.*
+!.env.example
