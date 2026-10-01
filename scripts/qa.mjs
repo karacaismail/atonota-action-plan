@@ -70,7 +70,14 @@ try {
       assert.equal(await page.evaluate(() => document.activeElement.getAttribute('href')), '#simdi');
       for (const width of widths) {
         await page.setViewportSize({ width, height: 800 });
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${engine} overflow ${width}`);
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+        if (overflow) {
+          const diagnostics = await page.evaluate(() => ({ viewport:innerWidth,documentWidth:document.documentElement.scrollWidth,elements:[...document.querySelectorAll('body *')].map(element=>{ const bounds=element.getBoundingClientRect();const style=getComputedStyle(element);return {tag:element.tagName,id:element.id,class:element.className,text:element.textContent.slice(0,140),left:bounds.left,right:bounds.right,width:bounds.width,scrollWidth:element.scrollWidth,clientWidth:element.clientWidth,font:style.fontFamily,minWidth:style.minWidth,display:style.display}; }).filter(element=>element.right>innerWidth || element.left<0).slice(0,50) }));
+          await writeFile(join(out,`${engine}-overflow-${width}.json`),JSON.stringify(diagnostics,null,2));
+          await page.screenshot({path:join(out,`${engine}-overflow-${width}.png`),fullPage:true});
+          console.error(JSON.stringify(diagnostics));
+        }
+        assert.equal(overflow, false, `${engine} overflow ${width}`);
         assert.equal(await page.locator('h1').count(), 1);
         const gutters = await page.locator('#role-sen .role-heading, #role-sen > p, #role-sen .role-phase > summary, #role-sen #task-U01').evaluateAll(elements => elements.map(element => ({ left:parseFloat(getComputedStyle(element).paddingLeft), right:parseFloat(getComputedStyle(element).paddingRight) })));
         assert.ok(gutters.every(gutter => gutter.left >= 12 && gutter.right >= 12), `${engine} role surface gutters ${width}`);
