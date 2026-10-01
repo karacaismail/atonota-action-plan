@@ -100,9 +100,11 @@ try {
       const focus = await target.evaluate(element => {
         const style = getComputedStyle(element);
         const parent = getComputedStyle(element.closest('.task'));
-        return { outline: style.outlineWidth, parentOutline: parent.outlineWidth, target: element.closest('label').getBoundingClientRect().height };
+        const bounds = element.closest('label').getBoundingClientRect();
+        return { outline: style.outlineWidth, parentOutline: parent.outlineWidth, target: bounds.height, width: bounds.width, coarse: matchMedia('(any-pointer:coarse)').matches };
       });
-      assert.ok(focus.target >= 44);
+      const touchMinimum = focus.coarse ? 48 : 44;
+      assert.ok(focus.target >= touchMinimum && focus.width >= touchMinimum);
       await page.screenshot({ path: join(out, `${engine}-landscape.png`) });
       const reset = page.locator('#reset-progress');
       await reset.click(); await page.keyboard.press('Escape');
