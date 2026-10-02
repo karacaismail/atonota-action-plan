@@ -2,6 +2,36 @@ import { plan } from './plan.mjs';
 import { normalizeState, transition, statusOf, isActive, canonicalAnchor, changedCompletionIDs } from './model.mjs';
 import { renderDependencyLinks, renderNext, statusLabels, navigationTarget } from './render.mjs';
 
+// Theme is independent of plan progress; changing it never remounts controls.
+const themeKey = 'atonota-theme';
+const themeButton = document.querySelector('[data-theme-toggle]');
+const themeNote = document.querySelector('#theme-note');
+const scheme = matchMedia('(prefers-color-scheme: dark)');
+const validTheme = value => value === 'light' || value === 'dark';
+let themePreference = validTheme(document.documentElement.dataset.theme) ? document.documentElement.dataset.theme : null;
+const currentTheme = () => themePreference ?? (scheme.matches ? 'dark' : 'light');
+function updateTheme() {
+  if (themePreference) document.documentElement.dataset.theme = themePreference;
+  else delete document.documentElement.dataset.theme;
+  const dark = currentTheme() === 'dark';
+  themeButton.textContent = dark ? 'Koyu tema' : 'Açık tema';
+  themeButton.setAttribute('aria-label', `${themeButton.textContent}. ${dark ? 'Açık temaya geç' : 'Koyu temaya geç'}`);
+  themeButton.hidden = false;
+}
+themeButton.addEventListener('click', () => {
+  themePreference = currentTheme() === 'dark' ? 'light' : 'dark';
+  updateTheme();
+  try { localStorage.setItem(themeKey, themePreference); themeNote.textContent = ''; themeButton.title = ''; }
+  catch { themeNote.textContent = themeButton.title = 'Tema bu oturumda değişti; tercih kaydedilemedi.'; }
+});
+scheme.addEventListener('change', () => { if (!themePreference) updateTheme(); });
+window.addEventListener('storage', event => {
+  if (event.key !== themeKey && event.key !== null) return;
+  themePreference = validTheme(event.newValue) ? event.newValue : null;
+  updateTheme();
+});
+updateTheme();
+
 const key = 'atonota-action-plan:v1';
 let state = normalizeState(null, plan);
 let owner = 'all';

@@ -1,34 +1,33 @@
 /* Shared foundation: one reading experience, enhanced by available space and input. */
 :root {
-  color-scheme: dark;
-  --color-page: #121719;
-  --color-surface: #1d272a;
-  --color-surface-hover: #2b3a3d;
-  --color-surface-selected: #314745;
-  --color-text: #eaf0ed;
-  --color-text-secondary: #bdc8c9;
-  --color-text-muted: #9caaad;
-  --color-accent: #bad6cf;
-  --color-accent-active: #e0f1e9;
-  --color-rule: #354347;
-  --color-control-border: #77868e;
-  --color-focus: #e9c97c;
-  --color-ready: #b5d7bc;
-  --color-waiting: #e2ca94;
-  --color-done: #a4c9d3;
-  --color-inactive: #aeb6ba;
-  --color-ready-surface: #253a30;
-  --color-waiting-surface: #3a3325;
-  --color-done-surface: #25393f;
-  --color-inactive-surface: #303538;
-  --color-flow-surface: #192225;
-  --color-flow-canvas: #192225;
-  --color-flow-node: #253236;
-  --color-flow-text: #eaf0ed;
-  --color-flow-secondary: #c0cece;
-  --color-flow-rule: #6c8785;
-  --color-flow-accent: #d9dfb6;
-  --color-selection: #314b56;
+  color-scheme: light dark;
+  --color-page: light-dark(#f4f5ef, #121719);
+  --color-surface: light-dark(#e8ede7, #1d272a);
+  --color-surface-hover: light-dark(#dde5dd, #2b3a3d);
+  --color-surface-selected: light-dark(#d2e1d8, #314745);
+  --color-text: light-dark(#172a26, #eaf0ed);
+  --color-text-secondary: light-dark(#455951, #bdc8c9);
+  --color-text-muted: light-dark(#53655e, #abb6b8);
+  --color-accent: light-dark(#286355, #bad6cf);
+  --color-accent-active: light-dark(#174d40, #e0f1e9);
+  --color-rule: light-dark(#c0cec4, #354347);
+  --color-control-border: light-dark(#657c72, #8a989f);
+  --color-focus: light-dark(#965400, #e9c97c);
+  --color-ready: light-dark(#285b34, #b5d7bc);
+  --color-waiting: light-dark(#735616, #e2ca94);
+  --color-done: light-dark(#285c69, #a4c9d3);
+  --color-inactive: light-dark(#586169, #aeb6ba);
+  --color-ready-surface: light-dark(#d9e9dc, #253a30);
+  --color-waiting-surface: light-dark(#f0e8cd, #3a3325);
+  --color-done-surface: light-dark(#dcebef, #25393f);
+  --color-inactive-surface: light-dark(#e2e5e3, #303538);
+  --color-flow-canvas: light-dark(#e5ece6, #192225);
+  --color-flow-node: light-dark(#d7e3da, #253236);
+  --color-flow-text: var(--color-text);
+  --color-flow-secondary: var(--color-text-secondary);
+  --color-flow-rule: light-dark(#607a6e, #6c8785);
+  --color-flow-accent: light-dark(#526123, #d9dfb6);
+  --color-selection: light-dark(#c5dbce, #314b56);
   --font-reading: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-code: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --font-small: .875rem;
@@ -103,6 +102,8 @@
   --motion-fast: 120ms;
   --motion-curve: ease-out;
 }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 *, *::before, *::after { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-block-start: var(--anchor-clearance); }
@@ -181,8 +182,10 @@ ul, ol { margin-block: var(--space-none); }
   min-block-size: var(--control-target);
 }
 .brand span { color: var(--color-text-muted); font-weight: var(--weight-normal); }
-.masthead-meta { color: var(--color-text-muted); font-size: var(--font-small); }
+.masthead-meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); color: var(--color-text-muted); font-size: var(--font-small); }
 .masthead-meta a { display: inline-flex; align-items: center; min-block-size: var(--control-target); }
+.theme-toggle { display: inline-flex; align-items: center; justify-content: center; min-inline-size: var(--control-target); min-block-size: var(--control-target); padding: var(--space-2) var(--space-3); border: none; background: var(--color-surface); color: var(--color-text-secondary); font-size: var(--font-meta); font-weight: var(--weight-medium); white-space: nowrap; }
+.theme-toggle:active { background: var(--color-surface-selected); color: var(--color-text); }
 .layout {
   max-inline-size: var(--page-width);
   margin-inline: auto;
@@ -478,7 +481,7 @@ a.project-address { display: flex; align-items: center; min-block-size: var(--co
   a:hover { color: var(--color-accent-active); }
   .rail-link:hover { color: var(--color-text); background: var(--color-surface-hover); }
   .rail-menu > summary:hover { color: var(--color-text); background: var(--color-surface-hover); }
-  .toolbar button:hover:not(:disabled), .role-phase > summary:hover { background: var(--color-surface-hover); color: var(--color-text); }
+  .toolbar button:hover:not(:disabled), .role-phase > summary:hover, .theme-toggle:hover { background: var(--color-surface-hover); color: var(--color-text); }
   .task-check:hover input:not(:disabled), .option label:hover input:not(:disabled) { border-color: var(--color-accent-active); }
   .flow a:hover { color: var(--color-flow-accent); }
   .overview-action:hover { background: var(--color-surface-hover); color: var(--color-text); }
@@ -542,10 +545,10 @@ a.project-address { display: flex; align-items: center; min-block-size: var(--co
   .flow-list li, .branch-node, .next-item, .overview-action { border: var(--rule-width) solid CanvasText; }
 }
 @media print {
-  :root { --color-page: #ffffff; --color-surface: #eeeeee; --color-text: #111111; --color-text-secondary: #333333; --color-text-muted: #555555; --color-accent: #111111; --color-rule: #bbbbbb; --color-flow-surface: #eeeeee; --color-flow-text: #111111; --color-flow-secondary: #333333; --color-flow-accent: #444444; }
+  :root, :root[data-theme] { color-scheme: light; --color-page: #ffffff; --color-surface: #eeeeee; --color-text: #111111; --color-text-secondary: #333333; --color-text-muted: #555555; --color-accent: #111111; --color-rule: #bbbbbb; --color-flow-canvas: #eeeeee; --color-flow-node: #eeeeee; --color-flow-text: #111111; --color-flow-secondary: #333333; --color-flow-accent: #444444; }
   .masthead, .rail { position: static; }
   .layout { display: block; }
-  .rail, .toolbar, .branch-options, .task-check, .skip-link { display: none; }
+  .rail, .toolbar, .branch-options, .task-check, .skip-link, .theme-toggle { display: none; }
   .task { grid-template-columns: minmax(0, 1fr); }
   a { text-decoration: none; }
   .role-phase, .task, .flow { break-inside: avoid; }

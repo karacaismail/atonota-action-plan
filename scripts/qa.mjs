@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { platform, release, arch } from 'node:os';
 import { plan } from '../plan.mjs';
+import { verifyThemes } from './theme-qa.mjs';
 
 const require = createRequire(import.meta.url);
 const playwright = require(process.env.PLAYWRIGHT_PATH || 'playwright');
@@ -42,7 +43,7 @@ try {
     const browser = await playwright[engine].launch(engine === 'chromium' ? { executablePath: playwright.chromium.executablePath() } : {});
     browserVersions[engine] = browser.version();
     try {
-      const context = await browser.newContext({ viewport: { width: 320, height: 800 }, hasTouch: true, reducedMotion: 'reduce', locale: 'tr-TR', timezoneId: 'Europe/Istanbul', deviceScaleFactor: 1, serviceWorkers: 'block' });
+      const context = await browser.newContext({ viewport: { width: 320, height: 800 }, hasTouch: true, colorScheme: 'dark', reducedMotion: 'reduce', locale: 'tr-TR', timezoneId: 'Europe/Istanbul', deviceScaleFactor: 1, serviceWorkers: 'block' });
       const page = await context.newPage();
       const errors = [];
       const badResponses = [];
@@ -371,7 +372,7 @@ try {
       await blocked.close();
       results.push({ engine, failedStorageWrite: 'pass', crossTabFocus: 'pass', closedRoleNavigation: 'pass', collapsedTaskMetadata:'pass', dynamicFlowState:'pass', conditionalDependencyMap:'pass', closingBranchFocus:'pass' });
       for (const width of [320,1440]) {
-        const fineContext = await browser.newContext({ viewport:{width,height:800},hasTouch:false,reducedMotion:'reduce',locale:'tr-TR',deviceScaleFactor:1,serviceWorkers:'block' });
+        const fineContext = await browser.newContext({ viewport:{width,height:800},hasTouch:false,colorScheme:'dark',reducedMotion:'reduce',locale:'tr-TR',deviceScaleFactor:1,serviceWorkers:'block' });
         const finePage = await fineContext.newPage(); await finePage.goto(url);
         await finePage.waitForFunction(() => !document.querySelector('[data-option]').disabled);
         const capabilities = await finePage.evaluate(() => ({ coarse:matchMedia('(any-pointer:coarse)').matches,fine:matchMedia('(any-pointer:fine)').matches,hover:matchMedia('(hover:hover)').matches }));
@@ -402,6 +403,7 @@ try {
         results.push({engine,width,input:'precision + keyboard',capabilities,criticalJourney:'pass',fallbackFontNoOverflow:width===320 ? 'pass' : 'not_applicable'});
         await fineContext.close();
       }
+      await verifyThemes(browser, engine, url, out, results);
     } finally { await browser.close(); }
   }
   const files = await Promise.all([...allowed].map(async file => ({ file, bytes: (await stat(join(directory, file))).size })));

@@ -14,6 +14,16 @@ const output = new URL('site/', root);
 const modules = ['app.mjs', 'plan.mjs', 'model.mjs', 'render.mjs'];
 const clientFiles = [...modules, 'styles.css', 'favicon.svg'];
 const sources = new Map(await Promise.all(clientFiles.map(async file => [file, await readFile(new URL(file, root))])));
+// Descriptive metadata is already in static HTML/guides. Keep every task field
+// and only the registries read by the shared browser model/render helpers.
+const clientPlan = {
+  version: plan.version,
+  roles: plan.roles.map(({ id, name }) => ({ id, name })),
+  phases: plan.phases.map(({ id }) => ({ id })),
+  options: plan.options.map(({ id }) => ({ id })),
+  tasks: plan.tasks,
+};
+sources.set('plan.mjs', Buffer.from(`export const plan = ${JSON.stringify(clientPlan)};\n`));
 for (const role of plan.roles) sources.set(`docs/${guideFiles[role.id]}`, Buffer.from(renderRoleGuide(plan, role.id)));
 sources.set('docs/genel-yol.md', Buffer.from(renderGeneralGuide(plan)));
 const html = renderPage(plan);

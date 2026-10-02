@@ -5,9 +5,42 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { renderRoleGuide, renderGeneralGuide } from '../scripts/docs.mjs';
+import { plan } from '../plan.mjs';
+import { normalizeState, transition, statusOf, dependenciesOf } from '../model.mjs';
+import { navigationTarget, renderNext, renderDependencyLinks, renderTask } from '../render.mjs';
 
 const source = new URL('../', import.meta.url);
 const clientFiles = ['app.mjs', 'plan.mjs', 'model.mjs', 'render.mjs', 'styles.css', 'favicon.svg'];
+
+test('emitted plan omits build-only metadata without changing tasks or runtime outcomes', async t => {
+  const fixture = await buildFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const { plan: emitted } = await import(join(fixture.output, 'plan.mjs'));
+  assert.equal(emitted.projects, undefined);
+  assert.equal(emitted.scope, undefined);
+  assert.deepEqual(emitted.tasks, JSON.parse(JSON.stringify(plan.tasks)));
+  assert.equal(emitted.version, plan.version);
+  for (let mask = 0; mask < 2 ** plan.options.length; mask++) {
+    const options = Object.fromEntries(plan.options.map((option, i) => [option.id, Boolean(mask & (1 << i))]));
+    for (const completed of [[], plan.tasks.map(task => task.id), ['U02', 'E01', 'H01', 'unknown']]) {
+      const raw = { options, completed };
+      const fullState = normalizeState(raw, plan);
+      const state = normalizeState(raw, emitted);
+      assert.deepEqual(state, fullState);
+      for (const role of ['all', ...plan.roles.map(role => role.id)]) assert.equal(renderNext(emitted, state, role), renderNext(plan, fullState, role));
+      for (const task of plan.tasks) {
+        const clientTask = emitted.tasks.find(item => item.id === task.id);
+        assert.equal(statusOf(clientTask, state, emitted), statusOf(task, fullState, plan));
+        assert.deepEqual(dependenciesOf(clientTask, state, emitted), dependenciesOf(task, fullState, plan));
+        assert.equal(renderDependencyLinks(clientTask, state, emitted), renderDependencyLinks(task, fullState, plan));
+        assert.equal(renderTask(clientTask, state, emitted), renderTask(task, fullState, plan));
+        assert.equal(navigationTarget(`task-${task.id}`, emitted), navigationTarget(`task-${task.id}`, plan));
+        for (const checked of [true, false]) assert.deepEqual(transition(state, { type: 'task', id: task.id, checked }, emitted), transition(fullState, { type: 'task', id: task.id, checked }, plan));
+      }
+      for (const option of plan.options) assert.deepEqual(transition(state, { type: 'option', id: option.id, checked: !state.options[option.id] }, emitted), transition(fullState, { type: 'option', id: option.id, checked: !fullState.options[option.id] }, plan));
+    }
+  }
+});
 
 async function buildFixture() {
   const root = await mkdtemp(join(tmpdir(), 'atonota-delivery-'));
