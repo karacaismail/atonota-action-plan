@@ -1,6 +1,6 @@
 import { plan } from './plan.mjs';
 import { normalizeState, transition, statusOf, isActive, canonicalAnchor, changedCompletionIDs } from './model.mjs';
-import { renderDependencyLinks, renderNext, statusLabels } from './render.mjs';
+import { renderDependencyLinks, renderNext, statusLabels, navigationTarget } from './render.mjs';
 
 const key = 'atonota-action-plan:v1';
 let state = normalizeState(null, plan);
@@ -42,6 +42,14 @@ function updateNext() {
   }
 }
 
+function updateNavigation() {
+  const current = navigationTarget(location.hash.slice(1), plan);
+  for (const anchor of document.querySelectorAll('.rail-link')) {
+    if (anchor.getAttribute('href') === current) anchor.setAttribute('aria-current', 'location');
+    else anchor.removeAttribute('aria-current');
+  }
+}
+
 function update() {
   const focused = document.activeElement;
   const taskScope = focused.closest('[data-task]');
@@ -75,6 +83,10 @@ function update() {
   }
   for (const branch of document.querySelectorAll('[data-branch]')) branch.hidden = !state.options[branch.dataset.branch];
   const active = plan.tasks.filter(task => isActive(task, state));
+  const progress = document.querySelector('#plan-progress');
+  progress.max = Math.max(1, active.length);
+  progress.value = state.completed.length;
+  document.querySelector('[data-progress-label]').textContent = `${state.completed.length} / ${active.length}`;
   document.querySelector('[data-metric="done"]').textContent = `${state.completed.length} / ${active.length}`;
   document.querySelector('[data-metric="ready"]').textContent = active.filter(task => statusOf(task, state, plan) === 'ready').length;
   for (const phase of plan.phases) {
@@ -153,6 +165,7 @@ for (const button of document.querySelectorAll('[data-owner-filter]')) {
 }
 
 function goToHash() {
+  updateNavigation();
   const requested = location.hash.slice(1);
   const id = canonicalAnchor(requested);
   if (!id) return;
@@ -218,4 +231,5 @@ download.addEventListener('click', () => {
 });
 
 update();
+updateNavigation();
 if (location.hash) requestAnimationFrame(goToHash);

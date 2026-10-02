@@ -1,8 +1,18 @@
-import { statusOf, dependenciesOf } from './model.mjs';
+import { statusOf, dependenciesOf, canonicalAnchor } from './model.mjs';
 
 export const escapeHTML = value => String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 export const statusLabels = { ready: 'Hazır', waiting: 'Ön koşul bekliyor', done: 'Tamamlandı', inactive: 'Koşul kapalı' };
 const link = (href, label, className = '') => `<a class="${className}" href="${escapeHTML(href)}">${escapeHTML(label)}</a>`;
+
+export function navigationTarget(requested, plan) {
+  const id = canonicalAnchor(requested);
+  if (!id || id === 'main') return '#simdi';
+  if (['simdi', 'genel', 'akislar', 'kisiler', 'projeler', 'kararlar'].includes(id)) return `#${id}`;
+  const task = plan.tasks.find(task => `task-${task.id}` === id);
+  if (task) return `#role-${task.role}`;
+  const role = plan.roles.find(role => id === `role-${role.id}` || id.startsWith(`role-${role.id}-phase-`));
+  return role ? `#role-${role.id}` : null;
+}
 
 export function renderDependencyLinks(task, state, plan) {
   const dependencies = dependenciesOf(task, state, plan);

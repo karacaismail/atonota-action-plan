@@ -32,6 +32,9 @@ const browserVersions = {};
 const startedAt = new Date().toISOString();
 const localManifest = JSON.parse(await readFile(join(directory, 'build-manifest.json'), 'utf8'));
 const widths = [320,360,375,390,639,640,641,768,1023,1024,1025,1311,1312,1313,1440];
+const stylesheet = await readFile(join(directory, 'styles.css'), 'utf8');
+const flowBoundaryRem = Number(/@container flow \(min-width: ([\d.]+)rem\)/u.exec(stylesheet)?.[1]);
+assert.ok(flowBoundaryRem > 0, 'flow breakpoint must come from the shipped stylesheet');
 
 try {
   for (const engine of ['chromium', 'firefox', 'webkit']) {
@@ -49,6 +52,21 @@ try {
       page.on('request', request => requests.push(request.url()));
       await page.goto(url);
       await page.waitForFunction(() => !document.querySelector('[data-option]').disabled);
+      assert.equal(await page.locator('.role-shortcut').count(), 3, `${engine} direct personal journeys`);
+      for (const role of plan.roles) {
+        const shortcut = page.locator(`.role-shortcut[href="#role-${role.id}"]`);
+        const dimensions = await shortcut.boundingBox();
+        assert.ok(dimensions.width >= 48 && dimensions.height >= 48, `${engine} personal journey touch area`);
+        await shortcut.click();
+        assert.equal(await page.evaluate(() => document.activeElement.closest('.role-section')?.id), `role-${role.id}`);
+        assert.equal(await page.locator('.rail-link[aria-current="location"]').getAttribute('href'), `#role-${role.id}`);
+      }
+      await page.locator('.overview-action[href="#simdi"]').click();
+      assert.equal(await page.locator('.rail-link[aria-current="location"]').getAttribute('href'), '#simdi');
+      await page.evaluate(() => { location.hash = '#main'; });
+      await page.waitForFunction(() => document.activeElement.getAttribute('href') === '#simdi');
+      assert.equal(await page.locator('#plan-progress').getAttribute('value'), '0');
+      results.push({ engine, personalShortcuts: 'pass', currentURLNavigation: 'pass', accessibleLocalProgress: 'pass' });
       assert.equal(await page.locator('#heading-sen').textContent(), 'İsmail Karaca');
       assert.equal(await page.locator('.role-section').count(), 3);
       assert.equal(await page.locator('main').getAttribute('tabindex'), null);
@@ -123,6 +141,33 @@ try {
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${engine} short viewport ${JSON.stringify(viewport)}`);
         results.push({ engine, viewport, shortHeight: 'pass', capabilities: await page.evaluate(() => ({ coarse:matchMedia('(any-pointer:coarse)').matches, fine:matchMedia('(any-pointer:fine)').matches, hover:matchMedia('(hover:hover)').matches })) });
       }
+      // Exercise N-1/N/N+1 of the actual content container, not a device label.
+      await page.setViewportSize({ width: 1440, height: 800 });
+      const flow = page.locator('#akislar > .flow').last();
+      const flowLink = flow.locator('.flow-step a').first();
+      await flowLink.focus();
+      const flowState = await flow.locator('[data-flow-status]').allTextContents();
+      const boundary = flowBoundaryRem * await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
+      for (const delta of [-1, 0, 1]) {
+        const evidence = await flow.evaluate((element, contentWidth) => {
+          const style = getComputedStyle(element);
+          element.style.inlineSize = `${contentWidth + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)}px`;
+          const list = element.querySelector('.flow-list');
+          const bounds = list.getBoundingClientRect();
+          return { contentWidth: bounds.width, direction: getComputedStyle(list).gridAutoFlow, overflow: list.scrollWidth > list.clientWidth,
+            nodes: [...list.children].map(node => { const box = node.getBoundingClientRect(); return {left:box.left, right:box.right}; }), left:bounds.left, right:bounds.right,
+            hitAreas: [...list.querySelectorAll('a')].map(link => { const box = link.getBoundingClientRect(); return {width:box.width,height:box.height}; }),
+            focusHref: document.activeElement.getAttribute('href'), minimum: matchMedia('(any-pointer:coarse)').matches ? 48 : 44 };
+        }, boundary + delta);
+        assert.equal(evidence.direction, delta < 0 ? 'row' : 'column', `${engine} content flow direction ${delta}`);
+        assert.equal(evidence.overflow, false, `${engine} container flow overflow ${delta}`);
+        assert.ok(evidence.nodes.every(node => node.left >= evidence.left - 1 && node.right <= evidence.right + 1));
+        assert.ok(evidence.hitAreas.every(area => area.width >= evidence.minimum && area.height >= evidence.minimum), `${engine} flow controls preserve hit areas ${delta}`);
+        assert.equal(evidence.focusHref, await flowLink.getAttribute('href'));
+        assert.deepEqual(await flow.locator('[data-flow-status]').allTextContents(), flowState);
+        results.push({ engine, flowContainerBoundary: boundary + delta, contentDrivenLayout: 'pass', evidence });
+      }
+      await flow.evaluate(element => element.style.removeProperty('inline-size'));
       await page.setViewportSize({ width: 320, height: 800 });
       await page.locator('.stage [href="#role-sen-phase-1"]').click();
       assert.equal(await page.locator('#role-sen-phase-1').getAttribute('open'), '');
@@ -151,6 +196,8 @@ try {
       await first.focus();
       await page.keyboard.press('Space');
       assert.equal(await first.isChecked(), true);
+      assert.equal(await page.locator('#plan-progress').getAttribute('value'), '1');
+      assert.match(await page.locator('[data-progress-label]').textContent(), /^1 \/ /);
       assert.equal(await page.locator('[data-complete="U02"]').isDisabled(), false);
       // Acquire focus by real keyboard navigation; programmatic focus after a mouse
       // click is not focus-visible in every engine.
@@ -183,6 +230,7 @@ try {
       assert.equal(await page.locator('[data-complete="E03"]').isDisabled(), false);
       await page.locator('[data-option="form"]').focus();
       await page.keyboard.press('Space');
+      assert.equal(await page.locator('#plan-progress').getAttribute('max'), String(plan.tasks.filter(task => !task.when || task.when === 'form').length));
       assert.equal(await page.locator('#task-F01').getAttribute('hidden'), null);
       assert.equal(await page.locator('[data-branch="form"]').isVisible(), true);
       const formDependencies = page.locator('[data-flow-dependencies="F02"] a');
